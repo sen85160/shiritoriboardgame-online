@@ -1814,7 +1814,10 @@ function listenToRoom(){
 
     // lastIndex・lastCharの更新
     if(data.lastIndex !== undefined) lastIndex = data.lastIndex;
-    if(data.lastChar !== undefined) lastChar = data.lastChar;
+    if(data.lastChar !== undefined){
+  lastChar = data.lastChar;
+  currentCharDisplay.textContent = data.lastChar;
+}
     if(data.usedWords) usedWords = new Set(data.usedWords);
 
     // ログの更新
@@ -1829,8 +1832,7 @@ function listenToRoom(){
     }
 
 
- if(data.firstChar){
-  currentCharDisplay.textContent = data.firstChar;
+if(data.firstChar){
   board.children[24].textContent = data.firstChar;
 }
 
