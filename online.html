@@ -736,6 +736,7 @@ function countHumanValidMoves() {
 
 function placeWord(fromAI=false){
   if(gameOver) return;
+
   if(mode === "online" && !isMyTurn){ alert("相手のターンです"); return; }
 
   const word=document.getElementById("wordInput").value.trim();
@@ -936,6 +937,17 @@ document.getElementById("humanValidCount").textContent = countHumanValidMoves();
       }
     }
   }
+
+  if(mode === "online"){
+  const validCount = countHumanValidMoves();
+  if(validCount === 0){
+    window._update(window._ref(window._db, `rooms/${roomKey}`), {
+      result: { winner: myRole === "first" ? "second" : "first", reason: "置ける単語がなくなったため" }
+    });
+    showResult("lose", "置ける単語がなくなったため");
+    return;
+  }
+}
   
   if(mode === "human"){
     const validCount = countHumanValidMoves();
@@ -962,7 +974,8 @@ document.getElementById("humanValidCount").textContent = countHumanValidMoves();
       lastChar: lastChar,
       usedWords: Array.from(usedWords),
       currentTurn: myRole === "first" ? "second" : "first",
-      log: newLog
+      log: newLog,
+      moveHistory: moveHistory
     });
     document.getElementById("wordInput").value = "";
     return;
@@ -1410,7 +1423,21 @@ function showResult(result, reason){
   // --- 再戦ボタン ---
   const retry = document.createElement("button");
   retry.textContent = "再戦";
- retry.onclick = () => {
+retry.onclick = () => {
+  if(mode === "online"){
+    window._update(window._ref(window._db, `rooms/${roomKey}`), {
+      status: "waiting",
+      result: null,
+      board: Array(49).fill(""),
+      lastIndex: 24,
+      lastChar: "",
+      firstChar: "",
+      usedWords: [],
+      currentTurn: "first",
+      log: [],
+      moveHistory: []
+    });
+  }
   overlay.classList.remove("show","lose","win");
   createBoard();
   document.getElementById("firstCharInput").disabled = false;
@@ -1794,13 +1821,13 @@ function listenToRoom(){
       });
     }
 
-    // 開始文字の更新
-    if(data.firstChar && !lastChar){
-      lastChar = data.firstChar;
-      currentCharDisplay.textContent = lastChar;
-      board.children[24].textContent = lastChar;
-      updateStartHighlight();
-    }
+
+   if(data.firstChar){
+  lastChar = data.firstChar;
+  currentCharDisplay.textContent = lastChar;
+  board.children[24].textContent = lastChar;
+  updateStartHighlight();
+}
 
     // ターンの更新
     const myRoleTurn = (data.currentTurn === myRole);
@@ -1808,15 +1835,29 @@ function listenToRoom(){
     currentPlayerDisplay.textContent = myRoleTurn ? myName : opponentName;
 
     // 結果の更新
-    if(data.result){
-      const iWin = data.result.winner === myRole;
-      showResult(iWin ? "win" : "lose", data.result.reason);
-    }
-
+   if(data.result && !gameOver){
+  const iWin = data.result.winner === myRole;
+  showResult(iWin ? "win" : "lose", data.result.reason);
+}
+    
+if(data.moveHistory){
+  moveHistory = data.moveHistory;
+  const cellSize = window.innerWidth <= 600 ? (window.innerWidth - 90) / 7 : 50;
+  drawLines("lineCanvas", cellSize, 2);
+}
+    
     updateStartHighlight();
     document.getElementById("humanValidCount").textContent = countHumanValidMoves();
   });
 }  
+
+window.addEventListener("beforeunload", () => {
+  if(mode === "online" && roomKey && !gameOver){
+    window._update(window._ref(window._db, `rooms/${roomKey}`), {
+      result: { winner: myRole === "first" ? "second" : "first", reason: "相手が退出しました" }
+    });
+  }
+});  
   
   
   
