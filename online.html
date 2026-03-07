@@ -1440,7 +1440,7 @@ retry.onclick = () => {
   }
   overlay.classList.remove("show","lose","win");
   createBoard();
-  document.getElementById("firstCharInput").disabled = false;
+  document.getElementById("firstCharInput").disabled = (mode === "online" && myRole === "first");
   document.getElementById("firstCharInput").value = "";
   if(mode === "ai"){
     currentPlayerDisplay.textContent = humanIsFirst ? "あなた" : playerBName;
@@ -1551,6 +1551,13 @@ function proposalWord(){
   
 function surrender(button) {
   if (gameOver) return;
+  if(mode === "online"){
+  window._update(window._ref(window._db, `rooms/${roomKey}`), {
+    result: { winner: myRole === "first" ? "second" : "first", reason: `${myName}が降参したため` }
+  });
+  showResult("lose", `${myName}が降参したため`);
+  return;
+}
   if (timerInterval) clearInterval(timerInterval);
 
   const loserName = currentPlayerDisplay.textContent;
@@ -1822,11 +1829,9 @@ function listenToRoom(){
     }
 
 
-   if(data.firstChar){
-  lastChar = data.firstChar;
-  currentCharDisplay.textContent = lastChar;
-  board.children[24].textContent = lastChar;
-  updateStartHighlight();
+ if(data.firstChar){
+  currentCharDisplay.textContent = data.firstChar;
+  board.children[24].textContent = data.firstChar;
 }
 
     // ターンの更新
@@ -1839,6 +1844,16 @@ function listenToRoom(){
   const iWin = data.result.winner === myRole;
   showResult(iWin ? "win" : "lose", data.result.reason);
 }
+if(data.status === "waiting" && gameOver){
+  gameOver = false;
+  const overlay = document.getElementById("resultOverlay");
+  overlay.classList.remove("show","lose","win");
+  createBoard();
+  document.getElementById("firstCharInput").disabled = myRole === "second" ? false : true;
+  document.getElementById("firstCharInput").value = "";
+  currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
+}
+    
     
 if(data.moveHistory){
   moveHistory = data.moveHistory;
@@ -1852,7 +1867,7 @@ if(data.moveHistory){
 }  
 
 window.addEventListener("beforeunload", () => {
-  if(mode === "online" && roomKey && !gameOver){
+  if(mode === "online" && roomKey){
     window._update(window._ref(window._db, `rooms/${roomKey}`), {
       result: { winner: myRole === "first" ? "second" : "first", reason: "相手が退出しました" }
     });
