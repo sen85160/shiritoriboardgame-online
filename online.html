@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>しりとり盤ゲーム 完全版</title>
+<style>
+body { font-family:sans-serif; padding:10px; }
+#modePage { text-align:center; }
+#container{ display:flex; justify-content:center; align-items:flex-start; gap:30px; }
+#board { display:grid; grid-template-columns:repeat(7,50px); gap:2px; margin-top:10px; }
+.cell { 
+  width:50px; 
+  height:50px; 
+  border:1px solid black; /* 枠線は元の黒に戻す */
+  display:flex; 
+  align-items:center; 
+  justify-content:center; 
+  font-size:20px;
+  box-sizing:border-box;
+  background: transparent; /* 背景を透明にして後ろの線を見せる */
+}
+
+.cell.startPoint{
+  border-width:4px;
+}
+#logBox{ width:240px; height:400px; border:1px solid black; overflow-y:auto; padding:5px; background:#f8f8f8; }
+.logEntry{ margin-bottom:5px; }
+
+
+#resultOverlay{
+  position: fixed;
+  inset: 0;              /* top/left/right/bottom全部0 */
+  display: none;
+  z-index: 9999;
+}
+
+#resultOverlay.show{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+  
+/* 外枠：高さを固定し、中身を縦に並べる設定 */
+.resultBox { 
+  padding: 20px; 
+  width: 90vw; 
+  max-width: 600px; 
+  max-height: 85vh; 
+  text-align: center;
+  display: flex;         
+  flex-direction: column; 
+  background: white;     
+  border-radius: 10px;
+  color: red;
+  box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+/* 敗北時（黒背景）の調整を上書き */
+#resultOverlay.lose .resultBox {
+  background: #1a1a1a;
+  color: white;          /* 敗北時は白文字で見やすく */
+}  
+
+/* ログなどのコンテンツ部分：ここだけスクロールさせる */
+.resultContent {
+  overflow-y: auto;
+  flex-grow: 1;          
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+/* ボタン部分：下に固定して線を引く */
+.resultFooter {
+  border-top: 1px solid rgba(0,0,0,0.1);
+  padding-top: 15px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* 敗北時（黒背景）の色の調整 */
+#resultOverlay.lose .resultBox { background: #1a1a1a; color: white; }
+#resultOverlay.lose .resultFooter { border-top: 1px solid rgba(255,255,255,0.2); }
+#resultOverlay.lose{
+  background: rgba(0,0,0,0.9);
+  color: white;
+}
+
+#resultOverlay.win{
+  background: white;
+  color: red;
+}
+.bigTitle{ font-size:60px; font-weight:bold; margin-bottom:20px; }
+.resultBoard{ display:grid; grid-template-columns:repeat(7,40px); gap:2px; margin:15px auto; }
+.resultCell{ width:40px; height:40px; border:1px solid gray; display:flex; align-items:center; justify-content:center; }
+button{ margin:5px; padding:6px 12px; }
+.resultCell.last {
+  border: 2px solid blue;  /* 太くした */
+}
+  
+#statusArea{
+  margin-top:10px;
+}
+
+#aiThinking{
+  display:none;
+  color:blue;
+  font-weight:bold;
+  font-size:18px;
+}
+
+#validCountArea{
+  color:red;
+  font-weight:bold;
+  font-size:18px;
+  margin-top:5px;
+}
+  
+@media (max-width: 600px) {
+  #container {
+    flex-direction: column;
+    align-items: center;
+  }
+  #board {
+    grid-template-columns: repeat(7, calc((100vw - 90px) / 7));
+    margin: 0 auto;
+  }
+  .cell {
+    width: calc((100vw - 90px) / 7);
+    height: calc((100vw - 90px) / 7);
+    font-size: 14px;
+  }
+  #logBox {
+    width: 90vw;
+  }
+  #wordInput {
+    width: 40vw;
+  }
+  
+  #sidePanel {
+    display: flex;
+    flex-direction: column;
+    width: 90vw;
+  }
+  #validCountArea { 
+    order: 1;
+    margin-top: 0;
+  }
+  #aiThinking { order: 2; }
+  #surrenderButton { order: 3; }
+  #trajectoryLabel { order: 4; }
+  #logBox { order: 5; }
+  #sidePanel h3 { order: 6; }
+}
+  
+</style>
+</head>
+<body>
+
+<div id="modePage">
+<h2>しりとり盤面ゲーム　</h2>
+
+<p>モード選択:</p>
+  <label><input type="radio" name="mode" value="human" id="modeHuman" onchange="toggleTurnSelect()"> 人間同士で対戦</label>
+  <label><input type="radio" name="mode" value="ai" id="modeAI" onchange="toggleTurnSelect()"> AIと対戦</label>
+
+  <label><input type="radio" name="mode" value="online" id="modeOnline" onchange="toggleTurnSelect()"> オンライン対戦(NEW)</label>
+ 
+ <div id="humanNames" style="display:none;">
+    <p>プレイヤー名入力:</p>
+    <input id="playerAName" placeholder="プレイヤーAの名前">
+    <input id="playerBName" placeholder="プレイヤーBの名前">
+    
+    <p>時間制限:</p>
+    <label><input type="radio" name="useTimer" value="no"  onchange="toggleTimerSettings()"> なし</label>
+    <label><input type="radio" name="useTimer" value="yes"  onchange="toggleTimerSettings()"> あり</label>
+    
+    <div id="timerSettings" style="display:none; margin-top:10px;">
+        <select id="limitMinutes">
+            <option value="3">3分</option>
+            <option value="5">5分</option>
+            <option value="10">10分</option>
+            <option value="15">15分</option>
+        </select>
+    </div>
+
+    <p>先攻を選択:</p>
+    <label><input type="radio" name="humanOrder" value="A" checked> 左の方が先攻</label>
+    <label><input type="radio" name="humanOrder" value="B"> 右の方が先攻</label>
+</div> <div id="turnSelect" style="display:none;">
+    <p>手番選択:</p>
+    <label><input type="radio" name="order" value="first" checked> 人間が先手</label>
+    <label><input type="radio" name="order" value="second"> 人間が後手</label>
+</div>
+
+<div id="aiSettings" style="display:none;">
+    <p>AI設定:</p>
+    <label>AI強さ:
+        <select id="aiStrength">
+            <option value="1">弱</option>
+            <option value="2">中</option>
+            <option value="3">強</option>
+            <option value="4">最強</option>
+        </select>
+    </label>
+</div>   
+  
+  
+ <div id="onlineSettings" style="display:none;">
+  <p>部屋の設定:</p>
+  <label><input type="radio" name="onlineAction" value="create" checked onchange="toggleOnlineSettings()"> 部屋を作る</label>
+  <label><input type="radio" name="onlineAction" value="join" onchange="toggleOnlineSettings()"> 部屋に入る</label>
+
+  <div id="createRoomSettings" style="margin-top:10px;">
+    <p>あなたの名前:</p>
+    <input id="onlinePlayerName" placeholder="名前を入力">
+    <p>手番:</p>
+    <label><input type="radio" name="onlineOrder" value="first" checked> 先攻</label>
+    <label><input type="radio" name="onlineOrder" value="second"> 後攻</label>
+    <p>合言葉:</p>
+    <input id="roomKeyInput" placeholder="合言葉を入力">
+  </div>
+
+  <div id="joinRoomSettings" style="display:none; margin-top:10px;">
+    <p>あなたの名前:</p>
+    <input id="onlinePlayerNameJoin" placeholder="名前を入力">
+    <p>合言葉:</p>
+    <input id="roomKeyJoinInput" placeholder="合言葉を入力">
+  </div>
+</div> 
+  
+  
+<br><br> 
+ <button type="button" onclick="showRules()" style="margin-top: 20px; padding: 5px 15px; cursor: pointer;">ルールを読む</button> 
+  
+  
+<br><br>
+<button onclick="startGame()">スタート</button>
+</div>  
+  
+<div id="rule-screen" style="display: none; text-align: center; padding: 10px; background-color: white;">
+    <p style="font-size: 14px; color: #888;">▼ 下にスクロールして読む</p>
+    
+    <img src="rule1.png" style="width: 95%; max-width: 800px; margin-bottom: 10px; border: 1px solid #ccc;">
+    <br>
+    <img src="rule2.png" style="width: 95%; max-width: 800px; margin-bottom: 20px; border: 1px solid #ccc;">
+    
+    <br>
+    <button type="button" onclick="backToMenu()" style="padding: 15px 30px; font-size: 18px; cursor: pointer;">メニューに戻る</button>
+</div>
+  
+
+  
+<div id="gamePage" style="display:none;">
+<div id="container">
+
+<div>
+<p>現在のプレイヤー: <span id="currentPlayer">A</span></p>
+ <div id="timerArea" style="display: none; margin: 10px 0; font-family: monospace; font-size: 22px; font-weight: bold;">
+  <div id="timerA" style="color: #ff4d4d; display: inline-block; margin-right: 20px;">
+    <span id="labelA">A</span>: <span id="timeLeftA">--:--</span>
+  </div>
+  <div id="timerB" style="color: #4d4dff; display: inline-block;">
+    <span id="labelB">B</span>: <span id="timeLeftB">--:--</span>
+  </div>
+</div>
+<p>現在の開始文字: <span id="currentChar">-</span></p>
+
+
+
+<input id="firstCharInput" placeholder="ひらがな１文字を入力">
+<button onclick="setFirstChar()">開始文字決定</button>
+<br><br>
+
+<input id="wordInput" placeholder="単語をひらがなで入力">
+<select id="direction">
+<option value="right">→</option>
+<option value="left">←</option>
+<option value="up">↑</option>
+<option value="down">↓</option>
+<option value="upright">↗</option>
+<option value="upleft">↖</option>
+<option value="downright">↘</option>
+<option value="downleft">↙</option>
+</select>
+
+  <button onclick="placeWord()">置く</button>
+  <button id="resetButton" onclick="resetGame()">リセット</button>
+  
+<div id="dictAlert" style="display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#f0f0f0; border:1px solid #aaa; border-radius:4px; padding:15px 20px; z-index:9999; text-align:center; box-shadow:2px 2px 6px rgba(0,0,0,0.3); min-width:300px;">
+  <p id="dictAlertMsg" style="margin:0 0 10px 0;"></p>
+  <button onclick="proposalWord()" style="background-color:#1a73e8; color:white; border:none; border-radius:4px; padding:6px 12px; cursor:pointer;">追加の申請をする</button>
+<button onclick="closeDictAlert()" style="background-color:#1a73e8; color:white; border:none; border-radius:4px; padding:6px 12px; cursor:pointer;">閉じる</button>
+</div>  
+  
+
+<div style="position: relative;">
+  <canvas id="lineCanvas" style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0;"></canvas>
+  <div id="board" style="position: relative; z-index: 1; background: transparent;"></div>
+</div>
+</div>
+
+<div id="sidePanel">
+<h3>対局ログ</h3>
+<div id="logBox"></div>
+
+<div id="statusArea">
+  <div id="aiThinking">AI考え中…</div>
+  <div id="validCountArea">
+    有効回答数: <span id="humanValidCount">0</span>
+  </div>
+</div>
+ 
+
+<button id="surrenderButton" data-player="A" onclick="surrender(this)">降参する</button>
+  
+  <label style="font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 5px; user-select: none;">
+    <input type="checkbox" id="showTrajectory" checked onchange="toggleTrajectory()">
+    軌跡を表示する
+  </label>
+</div>
+
+</div>
+</div>
+
+<div id="resultOverlay">
+<div class="resultBox" id="resultBox"></div>
+</div>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue, update, remove } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAp14vmxoLdh4WwD9kKMnmTaLZBAMNC2L8",
+  authDomain: "shiritori-game-4898f.firebaseapp.com",
+  databaseURL: "https://shiritori-game-4898f-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "shiritori-game-4898f",
+  storageBucket: "shiritori-game-4898f.firebasestorage.app",
+  messagingSenderId: "962873120214",
+  appId: "1:962873120214:web:bd54dda254c926cdb78077"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+window._db = db;
+window._ref = ref;
+window._set = set;
+window._get = get;
+window._onValue = onValue;
+window._update = update;
+window._remove = remove;
+</script>  
+  
+  
+  
+  
+  
+  
+
+<script>
+const board=document.getElementById("board");
+const currentCharDisplay=document.getElementById("currentChar");
+const currentPlayerDisplay=document.getElementById("currentPlayer");
+const logBox=document.getElementById("logBox");
+
+let lastChar="";
+let lastIndex=24;
+let mode="human";
+let aiStrength=1;
+let humanIsFirst=true;
+let gameOver=false;
+let usedWords=new Set();
+let lastPlacedIdx=24;
+
+let moveHistory = []; // 軌跡を保存する配列  
+let timerInterval = null;
+let playerATime = 0;
+let playerBTime = 0;
+let isTimerActive = false;  
+  
+const dirSymbol={
+right:"→", left:"←", up:"↑", down:"↓",
+upright:"↗", upleft:"↖", downright:"↘", downleft:"↙"
+};
+
+
+
+function toggleTurnSelect(){
+  const selected = document.querySelector('input[name="mode"]:checked').value;
+  const isAI = (selected === "ai");
+  const isOnline = (selected === "online");
+
+  document.getElementById("turnSelect").style.display = isAI ? "block" : "none";
+  document.getElementById("aiSettings").style.display = isAI ? "block" : "none";
+  document.getElementById("humanNames").style.display = (!isAI && !isOnline) ? "block" : "none";
+  document.getElementById("onlineSettings").style.display = isOnline ? "block" : "none";
+}
+
+function toggleOnlineSettings(){
+  const action = document.querySelector('input[name="onlineAction"]:checked').value;
+  document.getElementById("createRoomSettings").style.display = (action === "create") ? "block" : "none";
+  document.getElementById("joinRoomSettings").style.display = (action === "join") ? "block" : "none";
+}
+  
+  
+  
+  
+  
+  
+// 設定画面の出し分け
+function toggleTimerSettings() {
+  const useTimer = document.querySelector('input[name="useTimer"]:checked').value;
+  document.getElementById("timerSettings").style.display = (useTimer === "yes") ? "block" : "none";
+}
+
+// 時間を減らす処理 (まるごと書き換え)
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    if (gameOver) return;
+
+    // 現在画面に表示されている名前を取得
+    const nowPlaying = currentPlayerDisplay.textContent;
+
+    // Aさんのターンの場合
+    if (nowPlaying === playerAName) {
+      playerATime--;
+      if (playerATime <= 0) timeUp(playerAName);
+    } 
+    // Bさんのターンの場合
+    else if (nowPlaying === playerBName) {
+      playerBTime--;
+      if (playerBTime <= 0) timeUp(playerBName);
+    }
+    
+    updateTimerDisplay(); // 毎秒、両方の表示を更新
+  }, 1000);
+}
+
+  
+function updateTimerDisplay() {
+  const format = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const aElem = document.getElementById("timeLeftA");
+  const bElem = document.getElementById("timeLeftB");
+  
+  if (aElem) aElem.textContent = format(playerATime);
+  if (bElem) bElem.textContent = format(playerBTime);
+}
+
+// 時間切れの処理
+function timeUp(loserName) {
+  clearInterval(timerInterval);
+  const winnerName = (loserName === playerAName ? playerBName : playerAName);
+  currentPlayerDisplay.textContent = winnerName; // 勝者をセット
+  showResult("win", `${loserName}が時間切れのため`);
+}  
+
+function normalizeChar(c){
+const m={"ゃ":"や","ゅ":"ゆ","ょ":"よ","ぁ":"あ","ぃ":"い","ぅ":"う","ぇ":"え","ぉ":"お","っ":"つ"};
+return m[c]||c;
+}
+  
+function isHiraganaOnly(word){
+  return /^[ぁ-ゖー]+$/.test(word);
+}  
+
+function getLastChar(word){
+let chars=word.split("");
+while(chars[chars.length-1]==="ー") chars.pop();
+return normalizeChar(chars[chars.length-1]);
+}
+
+function createBoard(){
+if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+
+  // 2. タイマーが有効な場合、時間を初期設定（選択された分数）に戻す
+  if (isTimerActive) {
+    const limitSelect = document.getElementById("limitMinutes");
+    const mins = parseInt(limitSelect.value) || 3;
+    playerATime = mins * 60;
+    playerBTime = mins * 60;
+    
+    // 画面上の数字を 03:00 などの初期状態に更新する
+    updateTimerDisplay();
+  }  
+board.innerHTML="";
+logBox.innerHTML="";
+usedWords.clear()
+moveHistory = []; // 履歴をリセット
+const canvas = document.getElementById("lineCanvas");
+if(canvas) {
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height); // キャンバスをクリア
+}  
+  
+for(let i=0;i<49;i++){
+let c=document.createElement("div");
+c.className="cell";
+board.appendChild(c);
+}
+lastChar="";
+lastIndex=24;
+lastPlacedIdx=24;
+
+
+gameOver=false;
+updateStartHighlight();
+}
+
+
+let playerAName = "A";
+let playerBName = "B";
+let humanFirst = true; // 先攻フラグ
+  
+function startGame(){
+mode=document.querySelector('input[name="mode"]:checked').value;
+  
+ if(mode === "online"){
+    const action = document.querySelector('input[name="onlineAction"]:checked').value;
+    if(action === "create"){
+      createRoom();
+    } else {
+      joinRoom();
+    }
+    return;
+  }  
+  
+aiStrength=parseInt(document.getElementById("aiStrength").value);
+if(mode==="ai"){
+const order=document.querySelector('input[name="order"]:checked').value;
+humanIsFirst=(order==="first");
+}
+else { // 人間vs人間
+    playerAName = document.getElementById("playerAName").value.trim() || "A";
+    playerBName = document.getElementById("playerBName").value.trim() || "B";
+    humanFirst = document.querySelector('input[name="humanOrder"]:checked').value === "A";
+  }
+document.getElementById("modePage").style.display="none";
+document.getElementById("gamePage").style.display="block";
+createBoard();
+// 入力欄を復活させ、中身を空にする
+const firstCharInput = document.getElementById("firstCharInput");
+firstCharInput.disabled = false;
+firstCharInput.value = "";
+
+const wordInput = document.getElementById("wordInput");
+wordInput.value = "";  
+  
+if(mode === "ai") {
+  const strengthMap = { 1: "(弱)", 2: "(中)", 3: "(強)", 4: "(最強)" };
+  const aiFullName = "AI" + (strengthMap[aiStrength] || "");
+  
+  if (!humanIsFirst) {
+    currentPlayerDisplay.textContent = aiFullName;
+  } else {
+    currentPlayerDisplay.textContent = "あなた";
+  }
+  // 内部の名前管理用（降参時などに使用）
+  playerBName = aiFullName; 
+} else {
+  currentPlayerDisplay.textContent = humanFirst ? playerAName : playerBName;
+}
+// --- startGame 関数内の後半部分を以下に差し替え ---
+
+// ラジオボタンから「あり・なし」を取得
+const useTimerRadio = document.querySelector('input[name="useTimer"]:checked');
+  const useTimer = useTimerRadio ? useTimerRadio.value : "no";
+
+  if (mode === "human" && useTimer === "yes") {
+    isTimerActive = true;
+    const limitSelect = document.getElementById("limitMinutes");
+    const mins = parseInt(limitSelect.value) || 3;
+    
+    playerATime = mins * 60;
+    playerBTime = mins * 60;
+
+    // ラベル（名前）を表示に反映
+    document.getElementById("labelA").textContent = playerAName;
+    document.getElementById("labelB").textContent = playerBName;
+
+    // 先攻・後攻による色分け (humanFirst は startGame の上の方で決定されている変数)
+    if (humanFirst) {
+      document.getElementById("timerA").style.color = "#ff4d4d"; // A 赤
+      document.getElementById("timerB").style.color = "#4d4dff"; // B 青
+    } else {
+      document.getElementById("timerA").style.color = "#4d4dff"; // A 青
+      document.getElementById("timerB").style.color = "#ff4d4d"; // B 赤
+    }
+
+    // タイマーエリア全体を表示
+    document.getElementById("timerArea").style.display = "block";
+    
+    updateTimerDisplay();
+  } else {
+    isTimerActive = false;
+    // タイマーエリアがあれば隠す
+    const tArea = document.getElementById("timerArea");
+    if(tArea) tArea.style.display = "none";
+    if (timerInterval) clearInterval(timerInterval);
+  }
+}
+ 
+  
+  
+
+function setFirstChar(){
+  let firstChar = document.getElementById("firstCharInput").value.trim();
+  if(!firstChar){ alert("文字を入力してください"); return; }
+  if(firstChar.length > 1){ alert("1文字だけ入力してください"); return; }
+  if(!/^[ぁ-ん]$/.test(firstChar)){ alert("ひらがなを入力してください"); return; }
+
+  lastChar = normalizeChar(firstChar[0]);
+  board.children[24].textContent = lastChar;
+  currentCharDisplay.textContent = lastChar;
+  updateStartHighlight();
+  document.getElementById("firstCharInput").disabled = true;
+
+  if(mode === "online"){
+    const db = window._db;
+    const ref = window._ref;
+    const update = window._update;
+    update(ref(db, `rooms/${roomKey}`), {
+      firstChar: lastChar,
+      lastChar: lastChar,
+      currentTurn: "first"
+    });
+    return;
+  }
+
+  if(mode === "human" && isTimerActive){ startTimer(); }
+  if(mode === "ai" && !humanIsFirst){ setTimeout(aiTurn, 300); }
+}
+ 
+
+function switchPlayer() {
+  if(mode === "human") {
+    currentPlayerDisplay.textContent =
+      currentPlayerDisplay.textContent === playerAName ? playerBName : playerAName;
+  } else {
+    // AIモード：現在の表示が「あなた」なら次は「AI」、「AI」なら次は「あなた」
+    currentPlayerDisplay.textContent = 
+      (currentPlayerDisplay.textContent === "あなた") ? "AI" : "あなた";
+  }
+}
+  
+
+function canPlace(word,row,col,dir){
+for(let i=0;i<word.length;i++){
+if(row<0||row>6||col<0||col>6)return false;
+let idx=row*7+col;
+let c=normalizeChar(word[i]);
+if(board.children[idx].textContent!=="" &&
+board.children[idx].textContent!==c)return false;
+
+if(dir==="right")col++;
+if(dir==="left")col--;
+if(dir==="up")row--;
+if(dir==="down")row++;
+if(dir==="upright"){row--;col++;}
+if(dir==="upleft"){row--;col--;}
+if(dir==="downright"){row++;col++;}
+if(dir==="downleft"){row++;col--;}
+}
+return true;
+}
+
+// 「ー」の前のマスを計算
+function calculatePrevIndex(lastIdx, word, dir){
+let row=Math.floor(lastIdx/7);
+let col=lastIdx%7;
+if(dir==="right") col--;
+else if(dir==="left") col++;
+else if(dir==="up") row++;
+else if(dir==="down") row--;
+else if(dir==="upright"){ row++; col--; }
+else if(dir==="upleft"){ row++; col++; }
+else if(dir==="downright"){ row--; col--; }
+else if(dir==="downleft"){ row--; col++; }
+return row*7+col;
+}
+
+function countHumanValidMoves() {
+  const dictionary = dictionaryHard; // 人間はハード辞書固定
+  const words = dictionary[lastChar] || [];
+  let count = 0;
+
+  for (let w of words) {
+    if (usedWords.has(w)) continue;
+    if (getLastChar(w) === "ん") continue;
+
+    const dirs = Object.keys(dirSymbol);
+    for (let d of dirs) {
+      let row = Math.floor(lastIndex / 7);
+      let col = lastIndex % 7;
+      if (!canPlace(w, row, col, d)) continue;
+
+      // 1マス以上新規マスを埋めるか
+      let tempR = row, tempC = col, newPl = 0;
+      for (let i = 0; i < w.length; i++) {
+        let idx = tempR * 7 + tempC;
+        if (board.children[idx].textContent === "") newPl++;
+        if (d === "right") tempC++;
+        else if (d === "left") tempC--;
+        else if (d === "up") tempR--;
+        else if (d === "down") tempR++;
+        else if (d === "upright") { tempR--; tempC++; }
+        else if (d === "upleft") { tempR--; tempC--; }
+        else if (d === "downright") { tempR++; tempC++; }
+        else if (d === "downleft") { tempR++; tempC--; }
+      }
+      if (newPl > 0) {
+        count++;
+        break; // この単語で置ける方向が1つでもあればOK
+      }
+    }
+  }
+  return count;
+}
+
+function placeWord(fromAI=false){
+  if(gameOver) return;
+  if(mode === "online" && !isMyTurn){ alert("相手のターンです"); return; }
+
+  const word=document.getElementById("wordInput").value.trim();
+  const dir=document.getElementById("direction").value;
+
+  
+if(!isHiraganaOnly(word)){
+  alert("ひらがなのみ使用できます");
+  return;
+}  
+  
+ 
+
+  if(usedWords.has(word)){
+    alert("その単語は既に使用されています");
+    return;
+  }
+
+  if(normalizeChar(word[0])!==lastChar){
+    alert("しりとりになっていません");
+    return;
+  }
+
+  let row=Math.floor(lastIndex/7);
+  let col=lastIndex%7;
+
+  if(!canPlace(word,row,col,dir)){
+    alert("置けません");
+    return;
+  }
+
+  // 新規マスチェック
+  let tempRow=row;
+  let tempCol=col;
+  let newPlaced=0;
+  for(let i=0;i<word.length;i++){
+    let idx=tempRow*7+tempCol;
+    if(board.children[idx].textContent==="") newPlaced++;
+
+    if(dir==="right")tempCol++;
+    else if(dir==="left")tempCol--;
+    else if(dir==="up")tempRow--;
+    else if(dir==="down")tempRow++;
+    else if(dir==="upright"){tempRow--;tempCol++;}
+    else if(dir==="upleft"){tempRow--;tempCol--;}
+    else if(dir==="downright"){tempRow++;tempCol++;}
+    else if(dir==="downleft"){tempRow++;tempCol--;}
+  }
+
+  if(newPlaced===0){
+    alert("必ず1マス以上新しく埋めてください");
+    return;
+  }
+  
+ if(!fromAI && getLastChar(word) === "ん"){
+  showResult("lose", "「ん」で終わる単語を置いたため");
+  return;
+} 
+  
+
+  if(!fromAI){
+  const dict = dictionaryHard;
+  if(!(dict[lastChar] || []).includes(word)){
+    document.getElementById("dictAlertMsg").textContent = `「${word}」は辞書にない単語です`;
+    document.getElementById("dictAlert").style.display = "block";
+    return;
+  }
+}
+ 
+  
+  
+
+ // 実際に盤面に配置
+  row = Math.floor(lastIndex/7);
+  col = lastIndex%7;
+  for(let i=0; i<word.length; i++){
+    let idx = row * 7 + col;
+    let charToPlace = normalizeChar(word[i]); // 1. 文字を定義
+    board.children[idx].textContent = charToPlace; // 2. 画面に反映
+    lastPlacedIdx = idx; // 最後のマスの位置を更新
+
+    if(dir==="right")col++;
+    else if(dir==="left")col--;
+    else if(dir==="up")row--;
+    else if(dir==="down")row++;
+    else if(dir==="upright"){row--;col++;}
+    else if(dir==="upleft"){row--;col--;}
+    else if(dir==="downright"){row++;col++;}
+    else if(dir==="downleft"){row++;col--;}
+  }
+  
+  // 次の開始文字
+  let effectiveLastChar = getLastChar(word);
+  lastChar = effectiveLastChar;
+  if(word[word.length-1]==="ー"){
+      lastIndex = calculatePrevIndex(lastPlacedIdx, word, dir);
+  } else {
+      lastIndex = lastPlacedIdx;
+  }
+  updateStartHighlight();
+
+  currentCharDisplay.textContent=lastChar;
+  usedWords.add(word);
+ // 軌跡を記録（現在のプレイヤー名で色を判定）
+// --- ここから追加 ---
+  // 「ー」で終わる場合は、軌跡の終点を1文字前にずらす
+  let lineEndIdx = lastPlacedIdx;
+  if (word.endsWith("ー")) {
+    lineEndIdx = calculatePrevIndex(lastPlacedIdx, word, dir);
+  }
+
+  const isSecondPlayer = (currentPlayerDisplay.textContent === "AI" || currentPlayerDisplay.textContent === playerBName);
+  
+  moveHistory.push({
+    // 前回の終点から、今回の（「ー」を考慮した）終点まで線を引く
+    from: (moveHistory.length === 0) ? 24 : moveHistory[moveHistory.length - 1].to,
+    to: lineEndIdx,
+    color: isSecondPlayer ? "rgba(0, 0, 255, 0.2)" : "rgba(255, 0, 0, 0.2)"
+  });
+ const cellSize = window.innerWidth <= 600 ? (window.innerWidth - 90) / 7 : 50;
+drawLines("lineCanvas", cellSize, 2);
+  
+// ログに表示する名前を決定
+let logName = currentPlayerDisplay.textContent;
+
+// AIが置いた場合(fromAIがtrue)は、強さに応じて名前を補完する
+if (fromAI) {
+  const strengthMap = { 1: "(弱)", 2: "(中)", 3: "(強)", 4: "(最強)" };
+  logName = "AI" + (strengthMap[aiStrength] || "");
+}
+
+addLog(logName, word, dir);  
+  
+document.getElementById("humanValidCount").textContent = countHumanValidMoves();
+
+  // 「ん」で終わった場合は即敗北
+  if(lastChar==="ん"){
+    showResult("lose","「ん」で終わったため");
+    return;
+  }
+
+ 
+ 
+  // ここで両者の合法手チェックを行う
+  const dict = getCurrentDictionary();
+
+  // === AIの合法手チェック ===
+  if(mode==="ai"){
+    const aiMoves = getValidMoves();
+    if(!fromAI && aiMoves.length===0){
+      // 人間が置いた後にAIが置けない → 人間勝利
+      showResult("win","AIが置ける単語がなくなったため");
+      return;
+    }
+
+    // === 人間の合法手チェック ===
+    if(fromAI){
+      let humanCanPlace = false;
+      const humanDict = dictionaryHard;
+      const humanLastIndex = lastIndex;
+      const humanLastChar = lastChar;
+
+      const nextWords = humanDict[humanLastChar] || [];
+      for(let w of nextWords){
+        if(usedWords.has(w)) continue;
+        if(getLastChar(w)==="ん") continue;
+
+        for(let d of Object.keys(dirSymbol)){
+          let r=Math.floor(humanLastIndex/7);
+          let c=humanLastIndex%7;
+          if(canPlace(w,r,c,d)){
+            // 1マス以上新規マス埋めチェック
+            let tempR=r,tempC=c,newPl=0;
+            for(let i=0;i<w.length;i++){
+              let idx=tempR*7+tempC;
+              if(board.children[idx].textContent==="") newPl++;
+              if(d==="right")tempC++;
+              else if(d==="left")tempC--;
+              else if(d==="up")tempR--;
+              else if(d==="down")tempR++;
+              else if(d==="upright"){tempR--;tempC++;}
+              else if(d==="upleft"){tempR--;tempC--;}
+              else if(d==="downright"){tempR++;tempC++;}
+              else if(d==="downleft"){tempR++;tempC--;}
+            }
+            if(newPl>0){
+              humanCanPlace = true;
+              break;
+            }
+          }
+        }
+        if(humanCanPlace) break;
+      }
+
+      if(!humanCanPlace){
+        showResult("lose","これ以上置ける単語がないため");
+        return;
+      }
+    }
+  }
+  
+  if(mode === "human"){
+    const validCount = countHumanValidMoves();
+    if(validCount === 0){
+      const loser = currentPlayerDisplay.textContent;
+      const winner = (loser === playerAName ? playerBName : playerAName);
+      showResult("win", "はこれ以上置ける単語がないため、");
+      return;
+    }
+  }
+
+ if(mode === "online"){
+    const db = window._db;
+    const ref = window._ref;
+    const update = window._update;
+
+    const newBoard = Array.from(board.children, c => c.textContent);
+    const newLog = [];
+    logBox.querySelectorAll(".logEntry").forEach(e => newLog.push(e.innerHTML));
+
+    update(ref(db, `rooms/${roomKey}`), {
+      board: newBoard,
+      lastIndex: lastIndex,
+      lastChar: lastChar,
+      usedWords: Array.from(usedWords),
+      currentTurn: myRole === "first" ? "second" : "first",
+      log: newLog
+    });
+    document.getElementById("wordInput").value = "";
+    return;
+  }
+
+ 
+  
+  
+  switchPlayer();
+  document.getElementById("wordInput").value = "";
+
+  // AIターン呼び出しの判定
+  if (mode === "ai" && !fromAI) {
+    // 画面上の表示が「AI」に切り替わっていたら、AIの思考を開始する
+    if (currentPlayerDisplay.textContent === "AI") {
+      setTimeout(aiTurn, 300);
+    }
+  }
+}
+  
+function getCurrentDictionary(){
+  if(aiStrength === 3 || aiStrength === 4){
+    return dictionaryHard; // 強・最強
+  }
+  return dictionaryEasy; // 弱・中
+}
+
+/* ===== AI探索対応 ===== */
+function getValidMoves(){
+  let directions = Object.keys(dirSymbol);
+  let moves = [];
+  for(let i = 0; i < 49; i++){
+    if(i !== lastIndex) continue;
+
+    let baseRow = Math.floor(i / 7);
+    let baseCol = i % 7;
+    let dictionary = (mode === "human") ? dictionaryHard : getCurrentDictionary();
+    let wordList = dictionary[lastChar] || [];
+
+    for(let w of wordList){
+      if(!isHiraganaOnly(w)) continue;
+      if(usedWords.has(w)) continue;
+      if(getLastChar(w) === "ん") continue;
+
+      for(let d of directions){
+        if(canPlace(w, baseRow, baseCol, d)){
+          let tempRow = baseRow;
+          let tempCol = baseCol;
+          let newPlaced = 0;
+
+          for(let j = 0; j < w.length; j++){
+            let idx = tempRow * 7 + tempCol;
+            if(board.children[idx].textContent === "") newPlaced++;
+
+            if(d === "right") tempCol++;
+            else if(d === "left") tempCol--;
+            else if(d === "up") tempRow--;
+            else if(d === "down") tempRow++;
+            else if(d === "upright"){ tempRow--; tempCol++; }
+            else if(d === "upleft"){ tempRow--; tempCol--; }
+            else if(d === "downright"){ tempRow++; tempCol++; }
+            else if(d === "downleft"){ tempRow++; tempCol--; }
+          }
+
+          if(newPlaced > 0){
+            moves.push({word: w, dir: d, startIndex: i});
+          }
+        }
+      }
+    }
+  }
+  return moves;
+}
+  
+function aiTurn() {
+  if (gameOver) return;
+  const aiThinkingDiv = document.getElementById("aiThinking");
+  aiThinkingDiv.style.display = "block";
+
+  setTimeout(() => {
+    // 1. まず、今の盤面でAIが打てる全合法手を取得
+    let moves = getValidMoves();
+    if (moves.length === 0) {
+      aiThinkingDiv.style.display = "none";
+      showResult("win", "AIが合法手なし");
+      return;
+    }
+
+    let chosenMove;
+
+    // 最強モード(4)の場合のみ2手先読みを実行
+if (aiStrength === 4) {
+      // 一次選考：長い順100個 + ランダム100個 = 計200個に絞る
+      moves.sort((a, b) => b.word.length - a.word.length);
+      let candidates = moves.slice(0, 100).concat(
+        moves.slice(100).sort(() => 0.5 - Math.random()).slice(0, 100)
+      );
+
+      let bestScore = -Infinity;
+      let bestMoves = [];
+
+      for (let m of candidates) {
+        // AIがmを置いたと仮定した「未来の盤面」を作る
+        let boardAfterAI = simulateMove(Array.from(board.children, c => c.textContent), m);
+        
+        // その盤面で、人間が打てる反撃をリストアップ
+        let humanResponses = getMovesForSim(boardAfterAI, m.word, m.startIndex, m.dir);
+
+        // もし人間が反撃不能（AIの勝利確定）なら、その手を即採用
+        if (humanResponses.length === 0) {
+          chosenMove = m;
+          break;
+        }
+
+        // 人間の反撃を「長い順」にソートし、上位15手だけを精査
+        humanResponses.sort((a, b) => b.word.length - a.word.length);
+        let topHumanMoves = humanResponses.slice(0, 15); 
+        let minAiNextMoves = Infinity;
+
+        for (let hm of topHumanMoves) {
+          // 人間の反撃後の盤面を作る
+          let boardAfterHuman = simulateMove(boardAfterAI, hm);
+          // その後、AIが次に何手打てるか計算
+          let aiNextOptions = getMovesForSim(boardAfterHuman, hm.word, hm.startIndex, hm.dir).length;
+          
+          // 人間は「AIを最も追い詰める（AIの次の選択肢が最小になる）手」を打つと仮定
+          if (aiNextOptions < minAiNextMoves) {
+            minAiNextMoves = aiNextOptions;
+          }
+        }
+
+        // スコア評価： (人間に与える選択肢が少ないほど良い) + (自分の次の選択肢が多いほど良い)
+        let score = (1000 / (humanResponses.length + 1)) + (minAiNextMoves * 15);
+        if (minAiNextMoves === 0) score -= 5000; // 自分が詰む手は超大幅減点
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMoves = [m];
+        } else if (score === bestScore) {
+          bestMoves.push(m);
+        }
+      }
+      chosenMove = chosenMove || bestMoves[Math.floor(Math.random() * bestMoves.length)];
+
+    } else if (aiStrength === 2) {
+      // 中モード
+      let candidates = moves.length > 100 ? moves.sort(() => 0.5 - Math.random()).slice(0, 100) : moves;
+      let minHumanCount = Infinity;
+      for (let m of candidates) {
+        let boardAfterAI = simulateMove(Array.from(board.children, c => c.textContent), m);
+        let humanCount = getMovesForSim(boardAfterAI, m.word, m.startIndex, m.dir).length;
+        if (humanCount < minHumanCount) {
+          minHumanCount = humanCount;
+          chosenMove = m;
+        }
+      }
+    } else {
+      // 弱(1)・強(3) は完全ランダム
+      chosenMove = moves[Math.floor(Math.random() * moves.length)];
+    }
+
+    // 決定した手を実行
+    lastIndex = chosenMove.startIndex;
+    document.getElementById("wordInput").value = chosenMove.word;
+    document.getElementById("direction").value = chosenMove.dir;
+    aiThinkingDiv.style.display = "none";
+    placeWord(true);
+  }, 100);
+}
+
+// 盤面を汚さずにシミュレーションするための関数
+function simulateMove(currentBoardArray, move) {
+  let newBoard = [...currentBoardArray];
+  let r = Math.floor(move.startIndex / 7);
+  let c = move.startIndex % 7;
+  for (let i = 0; i < move.word.length; i++) {
+    let idx = r * 7 + c;
+    newBoard[idx] = normalizeChar(move.word[i]);
+    if (move.dir === "right") c++;
+    else if (move.dir === "left") c--;
+    else if (move.dir === "up") r--;
+    else if (move.dir === "down") r++;
+    else if (move.dir === "upright") { r--; c++; }
+    else if (move.dir === "upleft") { r--; c--; }
+    else if (move.dir === "downright") { r++; c++; }
+    else if (move.dir === "downleft") { r++; c--; }
+  }
+  return newBoard;
+}
+
+// 特定の盤面状態で、次のプレイヤーが打てる手を取得する関数
+function getMovesForSim(tempBoardArray, lastWord, lastIdx, lastDir) {
+  const dictionary = dictionaryHard;
+  const nextChar = getLastChar(lastWord);
+  
+  // 次の開始位置を算出（placeWord内のロジックを再現）
+  let nextIdx;
+  if (lastWord.endsWith("ー")) {
+    // 長音の場合は1マス戻る計算をここに入れる
+    nextIdx = calculatePrevIndex(lastIdx, lastWord, lastDir); 
+  } else {
+    // 単語の最後の文字が置かれた位置を割り出す
+    let r = Math.floor(lastIdx / 7);
+    let c = lastIdx % 7;
+    for(let i=0; i<lastWord.length-1; i++){
+       if (lastDir === "right") c++;
+       else if (lastDir === "left") c--;
+       else if (lastDir === "up") r--;
+       else if (lastDir === "down") r++;
+       else if (lastDir === "upright") { r--; c++; }
+       else if (lastDir === "upleft") { r--; c--; }
+       else if (lastDir === "downright") { r++; c++; }
+       else if (lastDir === "downleft") { r++; c--; }
+    }
+    nextIdx = r * 7 + c;
+  }
+
+  let possibleMoves = [];
+  const words = dictionary[nextChar] || [];
+  for (let w of words) {
+    if(!isHiraganaOnly(w)) continue;
+    if (usedWords.has(w) || getLastChar(w) === "ん") continue;
+    for (let d of Object.keys(dirSymbol)) {
+      // canPlaceOnTempBoard(仮盤面、単語、位置、方向) でチェック
+      if (canPlaceOnTempBoard(tempBoardArray, w, nextIdx, d)) {
+        possibleMoves.push({ word: w, dir: d, startIndex: nextIdx });
+      }
+    }
+  }
+  return possibleMoves;
+}
+
+// 仮盤面用の設置チェック関数
+function canPlaceOnTempBoard(tempBoard, word, startIdx, dir) {
+  let r = Math.floor(startIdx / 7);
+  let c = startIdx % 7;
+  let newChars = 0;
+  for (let i = 0; i < word.length; i++) {
+    if (r < 0 || r > 6 || c < 0 || c > 6) return false;
+    let idx = r * 7 + c;
+    let char = normalizeChar(word[i]);
+    if (tempBoard[idx] !== "" && tempBoard[idx] !== char) return false;
+    if (tempBoard[idx] === "") newChars++;
+    if (dir === "right") c++;
+    else if (dir === "left") c--;
+    else if (dir === "up") r--;
+    else if (dir === "down") r++;
+    else if (dir === "upright") { r--; c++; }
+    else if (dir === "upleft") { r--; c--; }
+    else if (dir === "downright") { r++; c++; }
+    else if (dir === "downleft") { r++; c--; }
+  }
+  return newChars > 0;
+}
+  
+function simulateHumanValidMoves(tempBoardArray, lastWord) {
+  const dictionary = dictionaryHard; // 人間は最強の辞書を使うと仮定
+  let count = 0;
+  
+  // 1. AIが最後に置いた単語から、人間が開始すべき文字と位置を特定
+  let nextChar = getLastChar(lastWord);
+  let nextIdx;
+
+  // AIが最後に置いたマスのインデックス(lastPlacedIdx)を使用
+  // 長音「ー」で終わる場合は1マス戻る
+  if (lastWord[lastWord.length - 1] === "ー") {
+    nextIdx = calculatePrevIndex(lastPlacedIdx, lastWord, document.getElementById("direction").value);
+  } else {
+    nextIdx = lastPlacedIdx;
+  }
+
+  // 2. その位置から人間が置ける単語があるか全スキャン
+  const words = dictionary[nextChar] || [];
+  const dirs = Object.keys(dirSymbol);
+
+  for (let w of words) {
+    if (usedWords.has(w)) continue; // 既出単語は除外
+    if (getLastChar(w) === "ん") continue;
+
+    for (let d of dirs) {
+      let r = Math.floor(nextIdx / 7);
+      let c = nextIdx % 7;
+      
+      let possible = true;
+      let newPl = 0;
+      let tr = r, tc = c;
+
+      // 単語が置けるかどうかのシミュレーション
+      for (let i = 0; i < w.length; i++) {
+        if (tr < 0 || tr > 6 || tc < 0 || tc > 6) { possible = false; break; }
+        let idx = tr * 7 + tc;
+        let char = normalizeChar(w[i]);
+        
+        // 仮の盤面(tempBoardArray)を参照して、文字が一致するか、空きマスかチェック
+        if (tempBoardArray[idx] !== "" && tempBoardArray[idx] !== char) { 
+          possible = false; 
+          break; 
+        }
+        if (tempBoardArray[idx] === "") newPl++;
+        
+        // 方向移動
+        if (d === "right") tc++;
+        else if (d === "left") tc--;
+        else if (d === "up") tr--;
+        else if (d === "down") tr++;
+        else if (d === "upright") { tr--; tc++; }
+        else if (d === "upleft") { tr--; tc--; }
+        else if (d === "downright") { tr++; tc++; }
+        else if (d === "downleft") { tr++; tc--; }
+      }
+
+      // 「置けて」かつ「1マス以上新しく埋める」手があればカウント
+      if (possible && newPl > 0) {
+        count++;
+        break; // 1つの単語につき1カウント（方向は問わない）
+      }
+    }
+  }
+  return count;const reasonText = document.createElement("p");ゲーム中と同じ見た目
+}
+
+function addLog(player,word,dir){
+  let entry=document.createElement("div");
+  entry.className="logEntry";
+  // textContentではなくinnerHTMLを使い、名前の部分をstrongタグで囲む
+entry.innerHTML = `<strong>${player}</strong> ${word} ${dirSymbol[dir]}`;
+  logBox.appendChild(entry);
+  logBox.scrollTop=logBox.scrollHeight;
+}
+
+function isBoardFull(){
+  for(let i=0;i<49;i++){
+    if(board.children[i].textContent==="") return false;
+  }
+  return true;
+}
+  function updateStartHighlight(){
+  for(let i=0;i<49;i++){
+    board.children[i].classList.remove("startPoint");
+  }
+
+  if(!gameOver){
+    board.children[lastIndex].classList.add("startPoint");
+  }
+}
+
+ 
+function showResult(result, reason){
+  gameOver = true;
+  if (timerInterval) clearInterval(timerInterval);
+
+ let hints = "";
+  // 「時間切れ」という言葉が含まれている場合、ヒントを作成
+  if (reason && reason.includes("時間切れ")) {
+    const possibleMoves = getValidMoves();
+    if (possibleMoves.length > 0) {
+      // 横並び用のスタイルを適用した単語リスト
+      const sampleMoves = getHintMoves(possibleMoves).map(m => 
+        `<span style="background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.1); font-weight: bold; white-space: nowrap;">${m.word} (${dirSymbol[m.dir]})</span>`
+      );
+      
+      // AI戦敗北（黒背景）かそれ以外かで色を変える
+      const hintStyle = (mode === "ai" && result === "lose") 
+        ? "color: #eee; background: #333; border: 1px solid #555;" 
+        : "color: #555; background: #f9f9f9; border: 1px solid #ccc;";
+
+      hints = `<br><br><div style="font-size:0.85em; padding:10px; border-radius:6px; margin-top:10px; ${hintStyle}">
+        <div style="margin-bottom:5px; font-weight:bold;">💡 時間があれば置けた単語の例:</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">${sampleMoves.join("")}</div>
+      </div>`;
+    }
+  }
+  const finalReason = reason + hints;
+
+  const overlay = document.getElementById("resultOverlay");
+  const box = document.getElementById("resultBox");
+
+  overlay.classList.remove("lose","win","show");
+  overlay.classList.add(result);
+  overlay.classList.add("show");
+
+  box.innerHTML = "";
+
+  const resultContent = document.createElement("div");
+  resultContent.className = "resultContent";
+ 
+  
+  // ★ AI戦で敗北した場合、リザルト全体を黒背景・白文字にするためのスタイル調整
+  if(mode === "ai" && result === "lose") {
+    resultContent.style.backgroundColor = "#222";
+    resultContent.style.color = "#fff";
+  }
+
+  const resultFooter = document.createElement("div");
+  resultFooter.className = "resultFooter";
+  // フッター（ボタンエリア）も色を合わせる
+  if(mode === "ai" && result === "lose") {
+    resultFooter.style.backgroundColor = "#333";
+  }
+
+  const title = document.createElement("div");
+  title.className = "bigTitle";
+  if(mode === "human" && result === "win") {
+    title.textContent = currentPlayerDisplay.textContent + "の勝利";
+  } else {
+    title.textContent = (result === "lose" ? "敗北" : "勝利");
+  }
+  resultContent.appendChild(title);
+
+  const reasonText = document.createElement("p");
+  reasonText.innerHTML = "理由: " + finalReason; 
+  resultContent.appendChild(reasonText);
+
+
+  // 盤面コピーの作成
+  const boardCopy = document.createElement("div");
+  boardCopy.className = "resultBoard";
+  for(let i=0; i<49; i++){
+    const c = document.createElement("div");
+    c.className = "resultCell";
+    c.textContent = board.children[i].textContent; 
+    if(i === lastIndex) c.classList.add("last");
+    boardCopy.appendChild(c);
+  }
+
+  // キャンバスコンテナの作成
+  const resContainer = document.createElement("div");
+  resContainer.style.cssText = "position:relative; margin:15px auto; width:294px;";
+  const resCanvas = document.createElement("canvas");
+  resCanvas.width = 294; resCanvas.height = 294;
+  resCanvas.style.cssText = "position:absolute; top:0; left:0;";
+  resContainer.appendChild(resCanvas);
+  resContainer.appendChild(boardCopy);
+  resultContent.appendChild(resContainer);
+
+  // ログの追加
+  const logTitle = document.createElement("h3");
+  logTitle.textContent = "対局ログ";
+  resultContent.appendChild(logTitle);
+  const logCopy = document.createElement("div");
+  logCopy.innerHTML = logBox.innerHTML;
+  resultContent.appendChild(logCopy);
+
+  // 3. フッターエリアにボタンを詰める
+  // --- 再戦ボタン ---
+  const retry = document.createElement("button");
+  retry.textContent = "再戦";
+ retry.onclick = () => {
+  overlay.classList.remove("show","lose","win");
+  createBoard();
+  document.getElementById("firstCharInput").disabled = false;
+  document.getElementById("firstCharInput").value = "";
+  if(mode === "ai"){
+    currentPlayerDisplay.textContent = humanIsFirst ? "あなた" : playerBName;
+  } else {
+    currentPlayerDisplay.textContent = humanFirst ? playerAName : playerBName;
+  }
+};
+  resultFooter.appendChild(retry);
+  
+// AIモードのときのみ「結果をシェア」ボタンを追加
+  if (mode === "ai") {
+    const shareBtn = document.createElement("button");
+    shareBtn.textContent = "結果をシェア";
+    shareBtn.style.backgroundColor = "#222"; 
+    shareBtn.style.color = "#fff";
+    shareBtn.style.fontWeight = "bold";
+    
+    shareBtn.onclick = async () => {
+      const lastWord = usedWords.size > 0 ? Array.from(usedWords).pop() : "なし";
+      const opponent = playerBName;
+      const gameUrl = window.location.href;
+
+      const shareText = `【しりとり盤ゲーム】で${result === "win" ? "勝利！" : "敗北..."}\n` +
+                        `対戦相手: ${opponent}\n` +
+                        (result === "win" ? `決まり手: ${lastWord}\n` : "") +
+                        `理由: ${reason}\n` +
+                        `URL: ${gameUrl}\n\n` +
+                        `#しりとり盤ゲーム`;
+
+      // ブラウザの共有機能が使える場合（スマホや最新ブラウザ）
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: 'しりとり盤ゲーム 結果',
+            text: shareText
+          });
+        } catch (err) {
+          console.log("Share cancelled or failed", err);
+        }
+      } else {
+        // 共有機能が使えないPCブラウザなどの場合は、クリップボードにコピー
+        navigator.clipboard.writeText(shareText).then(() => {
+          alert("結果をクリップボードにコピーしました！\nTwitterやLINEなどに貼り付けて共有してください。");
+        });
+      }
+    };
+    resultFooter.appendChild(shareBtn);
+  }
+
+  // --- タイトルへ戻るボタン ---
+  const back = document.createElement("button");
+  back.textContent = "タイトルへ戻る";
+  back.onclick = () => {
+    overlay.classList.remove("show","lose","win");
+    document.getElementById("gamePage").style.display = "none";
+    document.getElementById("modePage").style.display = "block";
+  };
+  resultFooter.appendChild(back);
+
+  // 4. boxに合体させる
+  box.appendChild(resultContent);
+  box.appendChild(resultFooter);
+
+  // 5. 軌跡の描画
+  const resColor = (result === "lose") ? "rgba(255, 255, 255, 0.30)" : "rgba(0, 0, 255, 0.15)";
+  setTimeout(() => {
+    const ctx = resCanvas.getContext("2d");
+    moveHistory.forEach(move => {
+      const fR = Math.floor(move.from / 7), fC = move.from % 7;
+      const tR = Math.floor(move.to / 7), tC = move.to % 7;
+      ctx.beginPath(); ctx.strokeStyle = resColor; ctx.lineWidth = 8;
+      ctx.moveTo(fC * 42 + 20, fR * 42 + 20);
+      ctx.lineTo(tC * 42 + 20, tR * 42 + 20);
+      ctx.stroke();
+    });
+  }, 100);
+
+  box.scrollTop = 0;
+}
+ 
+function closeDictAlert(){
+    document.getElementById("dictAlert").style.display = "none";
+}
+
+function proposalWord(){
+    // ここに後でGoogleフォーム連携を入れる
+    closeDictAlert();
+    alert("提案しました！ありがとうございます");
+}  
+  
+  
+function proposalWord(){
+  const word = document.getElementById("wordInput").value.trim();
+  const formURL = "https://docs.google.com/forms/d/e/1FAIpQLSeZS_NojF6TXlY61gpPSmGPkrEpBnyLzmhmCnckh6_w2GbdDg/formResponse";
+  
+  fetch(formURL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `entry.1568441031=${encodeURIComponent(word)}`
+  });
+  
+  closeDictAlert();
+  alert("「" + word + "」を提案しました！ありがとうございます");
+}  
+  
+  
+  
+function surrender(button) {
+  if (gameOver) return;
+  if (timerInterval) clearInterval(timerInterval);
+
+  const loserName = currentPlayerDisplay.textContent;
+  let hints = "";
+  const possibleMoves = getValidMoves();
+
+  if (possibleMoves.length > 0) {
+    const sampleMoves = getHintMoves(possibleMoves).map(m => 
+      `<span style="background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.1);">${m.word} (${dirSymbol[m.dir]})</span>`
+    );
+    
+    // AI戦敗北時（黒背景）と通常時でスタイルが馴染むように調整
+    const hintStyle = (mode === "ai") 
+      ? "color: #eee; background: #333; border: 1px solid #555;" 
+      : "color: #555; background: #f9f9f9; border: 1px solid #ccc;";
+
+    hints = `<br><br><div style="font-size:0.85em; padding:10px; border-radius:6px; margin-top:10px; ${hintStyle}">
+      <div style="margin-bottom:5px; font-weight:bold;">💡 置けた単語の例:</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">${sampleMoves.join("")}</div>
+    </div>`;
+  }
+
+  if (mode === "ai") {
+    showResult("lose", "あなたが降参したため" + hints);
+  } else {
+    const winnerName = (loserName === playerAName ? playerBName : playerAName);
+    currentPlayerDisplay.textContent = winnerName;
+    showResult("win", `${loserName}が降参したため` + hints);
+  }
+
+  // 4. 結果表示（reasonMessageにすべての情報が入った状態で送る）
+  showResult(resultType, reasonMessage);
+}
+  
+function resetGame(){
+  if(confirm("本当にリセットしますか？")){
+    createBoard();
+    document.getElementById("firstCharInput").disabled=false;
+    document.getElementById("firstCharInput").value="";
+  }
+}  
+  
+function drawLines(canvasId, cellSize, gap) {
+  const canvas = document.getElementById(canvasId);
+  const boardElem = document.getElementById("board");
+  const toggle = document.getElementById("showTrajectory");
+  
+  if (!canvas || !boardElem || !toggle) return;
+
+  const ctx = canvas.getContext("2d");
+  canvas.width = boardElem.clientWidth;
+  canvas.height = boardElem.clientHeight;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!toggle.checked) return;
+
+  moveHistory.forEach(move => {
+    const fR = Math.floor(move.from / 7);
+    const fC = move.from % 7;
+    const tR = Math.floor(move.to / 7);
+    const tC = move.to % 7;
+
+    ctx.beginPath();
+    ctx.strokeStyle = move.color;
+    ctx.lineWidth = 10; 
+    ctx.lineCap = "round";
+    ctx.moveTo(fC * (cellSize + gap) + cellSize / 2, fR * (cellSize + gap) + cellSize / 2);
+    ctx.lineTo(tC * (cellSize + gap) + cellSize / 2, tR * (cellSize + gap) + cellSize / 2);
+    ctx.stroke();
+  });
+}
+  
+function toggleTrajectory() {
+  // バーの状態が変わったので、再描画（または消去）を実行する
+ const cellSize = window.innerWidth <= 600 ? (window.innerWidth - 90) / 7 : 50;
+drawLines("lineCanvas", cellSize, 2);
+}  
+  
+function showRules() {
+    // 画面上のすべての要素を一旦隠すために、メインのコンテナを隠すか、
+    // もしくはモード選択のdivにIDをつけてそれを隠します。
+    document.querySelector('body > div').style.display = 'none'; 
+    document.getElementById('rule-screen').style.display = 'block';
+    window.scrollTo(0, 0);
+}
+
+function backToMenu() {
+    document.getElementById('rule-screen').style.display = 'none';
+    document.querySelector('body > div').style.display = 'block';
+}  
+  
+function getHintMoves(moves) {
+  if (moves.length <= 3) return moves;
+  
+  // 最短単語の中からランダムに1つ
+  const minLen = Math.min(...moves.map(m => m.word.length));
+  const shortest = moves.filter(m => m.word.length === minLen);
+  const pick1 = shortest[Math.floor(Math.random() * shortest.length)];
+  
+  // 最長単語の中からランダムに1つ
+  const maxLen = Math.max(...moves.map(m => m.word.length));
+  const longest = moves.filter(m => m.word.length === maxLen);
+  const pick2 = longest[Math.floor(Math.random() * longest.length)];
+  
+  // 残りの中から完全ランダムに1つ
+  const rest = moves.filter(m => m !== pick1 && m !== pick2);
+  const pick3 = rest[Math.floor(Math.random() * rest.length)];
+  
+  return [pick1, pick2, pick3];
+}  
+  
+ 
+  
+  
+let roomKey = "";
+let myRole = ""; // "first" or "second"
+let myName = "";
+let opponentName = "";
+let isMyTurn = false;
+
+function createRoom(){
+  roomKey = document.getElementById("roomKeyInput").value.trim();
+  myName = document.getElementById("onlinePlayerName").value.trim() || "プレイヤー1";
+  const order = document.querySelector('input[name="onlineOrder"]:checked').value;
+  myRole = order;
+
+  if(!roomKey){ alert("合言葉を入力してください"); return; }
+
+  const db = window._db;
+  const ref = window._ref;
+  const set = window._set;
+  const onValue = window._onValue;
+
+  const roomRef = ref(db, `rooms/${roomKey}`);
+  set(roomRef, {
+    status: "waiting",
+    first: myRole === "first" ? { name: myName } : null,
+    second: myRole === "second" ? { name: myName } : null,
+    firstChar: "",
+    board: Array(49).fill(""),
+    lastIndex: 24,
+    lastChar: "",
+    usedWords: [],
+    currentTurn: "first",
+    log: []
+  });
+
+  alert(`部屋を作りました。合言葉「${roomKey}」を相手に伝えてください。`);
+  waitForOpponent();
+}
+
+function joinRoom(){
+  roomKey = document.getElementById("roomKeyJoinInput").value.trim();
+  myName = document.getElementById("onlinePlayerNameJoin").value.trim() || "プレイヤー2";
+
+  if(!roomKey){ alert("合言葉を入力してください"); return; }
+
+  const db = window._db;
+  const ref = window._ref;
+  const get = window._get;
+  const update = window._update;
+
+  const roomRef = ref(db, `rooms/${roomKey}`);
+  get(roomRef).then(snapshot => {
+    if(!snapshot.exists()){ alert("部屋が見つかりません"); return; }
+    const data = snapshot.val();
+    if(data.status !== "waiting"){ alert("この部屋はすでに対戦中です"); return; }
+
+    // 空いている手番に入る
+    if(!data.first){
+      myRole = "first";
+      update(roomRef, { first: { name: myName }, status: "ready" });
+    } else if(!data.second){
+      myRole = "second";
+      update(roomRef, { second: { name: myName }, status: "ready" });
+    } else {
+      alert("部屋が満員です");
+      return;
+    }
+    startOnlineGame();
+  });
+}
+
+function waitForOpponent(){
+  const db = window._db;
+  const ref = window._ref;
+  const onValue = window._onValue;
+
+  const roomRef = ref(db, `rooms/${roomKey}/status`);
+  const unsubscribe = onValue(roomRef, (snapshot) => {
+    if(snapshot.val() === "ready"){
+      unsubscribe();
+      startOnlineGame();
+    }
+  });
+  // 待機中の表示
+  alert("相手の入室を待っています...");
+}
+
+function startOnlineGame(){
+  const db = window._db;
+  const ref = window._ref;
+  const onValue = window._onValue;
+
+  // 部屋のデータを取得して名前を設定
+  const roomRef = ref(db, `rooms/${roomKey}`);
+  window._onValue(roomRef, (snapshot) => {}, { onlyOnce: true });
+
+  window._get(roomRef).then(snapshot => {
+    const data = snapshot.val();
+    playerAName = data.first?.name || "先攻";
+    playerBName = data.second?.name || "後攻";
+    opponentName = myRole === "first" ? playerBName : playerAName;
+
+    isMyTurn = (myRole === "first"); // 先攻が最初のターン、ただし開始文字は後攻
+
+    document.getElementById("modePage").style.display = "none";
+    document.getElementById("gamePage").style.display = "block";
+    createBoard();
+
+    document.getElementById("firstCharInput").disabled = false;
+    document.getElementById("firstCharInput").value = "";
+    document.getElementById("wordInput").value = "";
+
+    // 後攻が開始文字を決める
+    if(myRole === "second"){
+      currentPlayerDisplay.textContent = myName;
+      document.getElementById("firstCharInput").disabled = false;
+    } else {
+      currentPlayerDisplay.textContent = opponentName;
+      document.getElementById("firstCharInput").disabled = true;
+    }
+
+    // Firebase監視開始
+    listenToRoom();
+  });
+}
+
+function listenToRoom(){
+  const db = window._db;
+  const ref = window._ref;
+
+  const roomRef = ref(db, `rooms/${roomKey}`);
+  window._onValue(roomRef, (snapshot) => {
+    const data = snapshot.val();
+    if(!data) return;
+
+    // 盤面の更新
+    if(data.board){
+      for(let i = 0; i < 49; i++){
+        board.children[i].textContent = data.board[i] || "";
+      }
+    }
+
+    // lastIndex・lastCharの更新
+    if(data.lastIndex !== undefined) lastIndex = data.lastIndex;
+    if(data.lastChar !== undefined) lastChar = data.lastChar;
+    if(data.usedWords) usedWords = new Set(data.usedWords);
+
+    // ログの更新
+    if(data.log){
+      logBox.innerHTML = "";
+      data.log.forEach(entry => {
+        const div = document.createElement("div");
+        div.className = "logEntry";
+        div.innerHTML = entry;
+        logBox.appendChild(div);
+      });
+    }
+
+    // 開始文字の更新
+    if(data.firstChar && !lastChar){
+      lastChar = data.firstChar;
+      currentCharDisplay.textContent = lastChar;
+      board.children[24].textContent = lastChar;
+      updateStartHighlight();
+    }
+
+    // ターンの更新
+    const myRoleTurn = (data.currentTurn === myRole);
+    isMyTurn = myRoleTurn;
+    currentPlayerDisplay.textContent = myRoleTurn ? myName : opponentName;
+
+    // 結果の更新
+    if(data.result){
+      const iWin = data.result.winner === myRole;
+      showResult(iWin ? "win" : "lose", data.result.reason);
+    }
+
+    updateStartHighlight();
+    document.getElementById("humanValidCount").textContent = countHumanValidMoves();
+  });
+}  
+  
