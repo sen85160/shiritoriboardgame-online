@@ -323,7 +323,7 @@ button{ margin:5px; padding:6px 12px; }
 </div>
 </div>
 
-<div id="waitingOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9998; justify-content:center; align-items:center;">
+<div id="waitingOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:10000; justify-content:center; align-items:center;">
   <div style="background:white; border-radius:10px; padding:30px; text-align:center; min-width:280px;">
     <p id="waitingMessage" style="font-size:18px; margin-bottom:20px;"></p>
     <button id="waitingOkBtn" style="display:none;" onclick="handleWaitingOk()">OK</button>
@@ -1912,15 +1912,6 @@ if(data.status === "ready" && !gameOver){
     isMyTurn = myRoleTurn;
     currentPlayerDisplay.textContent = myRoleTurn ? myName : opponentName;
 
-    if(data.result && !gameOver){
-      const iWin = data.result.winner === myRole;
-      if(iWin){
-        currentPlayerDisplay.textContent = myName;
-      } else {
-        currentPlayerDisplay.textContent = opponentName;
-      }
-      showResult(iWin ? "win" : "lose", data.result.reason);
-    }
 if(data.status === "rematch_requested"){
       showWaiting("相手が再戦を希望しています", true);
       window._pendingRematch = () => {
@@ -1939,6 +1930,17 @@ if(data.status === "rematch_requested"){
         });
       };
     }
+  
+    if(data.result && !gameOver){
+      const iWin = data.result.winner === myRole;
+      if(iWin){
+        currentPlayerDisplay.textContent = myName;
+      } else {
+        currentPlayerDisplay.textContent = opponentName;
+      }
+      showResult(iWin ? "win" : "lose", data.result.reason);
+    }
+
     
 
     if(data.moveHistory){
