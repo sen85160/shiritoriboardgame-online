@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>
-<head>
+<head> 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>しりとり盤ゲーム 完全版</title>
@@ -1453,12 +1453,10 @@ retry.onclick = () => {
       log: [],
       moveHistory: []
     });
+    return;
   }
   overlay.classList.remove("show","lose","win");
   createBoard();
-  disconnectAlerted = false;
-  document.getElementById("firstCharInput").disabled = (mode === "online" && myRole === "first");
-  document.getElementById("firstCharInput").value = "";
   if(mode === "ai"){
     currentPlayerDisplay.textContent = humanIsFirst ? "あなた" : playerBName;
   } else {
@@ -1694,6 +1692,7 @@ let myName = "";
 let opponentName = "";
 let isMyTurn = false;
 let disconnectAlerted = false;  
+let roomUnsubscribe = null;  
 
 function createRoom(){
   roomKey = document.getElementById("roomKeyInput").value.trim();
@@ -1799,13 +1798,14 @@ function startOnlineGame(){
     document.getElementById("firstCharInput").value = "";
     document.getElementById("wordInput").value = "";
 
-    // 後攻が開始文字を決める
     if(myRole === "second"){
       currentPlayerDisplay.textContent = myName;
       document.getElementById("firstCharInput").disabled = false;
+      alert("あなたは後攻です。最初の文字を決めてください。");
     } else {
       currentPlayerDisplay.textContent = opponentName;
       document.getElementById("firstCharInput").disabled = true;
+      alert("あなたは先攻です。後攻が最初の文字を置くまで待機してください。\n最初の文字が置かれたら、単語を置いてください。");
     }
 
     // Firebase監視開始
@@ -1817,40 +1817,39 @@ function listenToRoom(){
   const db = window._db;
   const ref = window._ref;
 
-const discRef = window._ref(db, `rooms/${roomKey}/disconnected/${myRole}`);
-window._onDisconnect(discRef).set(true);
-  
+  const discRef = window._ref(db, `rooms/${roomKey}/disconnected/${myRole}`);
+  window._onDisconnect(discRef).set(true);
 
   const roomRef = ref(db, `rooms/${roomKey}`);
-  window._onValue(roomRef, (snapshot) => {
+  if(roomUnsubscribe) {
+    roomUnsubscribe();
+    roomUnsubscribe = null;
+  }
+  roomUnsubscribe = window._onValue(roomRef, (snapshot) => {
     const data = snapshot.val();
     if(!data) return;
 
-if(data.disconnected){
-  const opponentRole = myRole === "first" ? "second" : "first";
-  if(data.disconnected[opponentRole] && !gameOver && !disconnectAlerted){
-    disconnectAlerted = true;
-    alert("相手が退出しました");
-  }
-}
-  
+    if(data.disconnected){
+      const opponentRole = myRole === "first" ? "second" : "first";
+      if(data.disconnected[opponentRole] && !gameOver && !disconnectAlerted){
+        disconnectAlerted = true;
+        alert("相手が退出しました");
+      }
+    }
 
-    // 盤面の更新
     if(data.board){
       for(let i = 0; i < 49; i++){
         board.children[i].textContent = data.board[i] || "";
       }
     }
 
-    // lastIndex・lastCharの更新
     if(data.lastIndex !== undefined) lastIndex = data.lastIndex;
     if(data.lastChar !== undefined){
-  lastChar = data.lastChar;
-  currentCharDisplay.textContent = data.lastChar;
-}
+      lastChar = data.lastChar;
+      currentCharDisplay.textContent = data.lastChar;
+    }
     if(data.usedWords) usedWords = new Set(data.usedWords);
 
-    // ログの更新
     if(data.log){
       logBox.innerHTML = "";
       data.log.forEach(entry => {
@@ -1861,48 +1860,51 @@ if(data.disconnected){
       });
     }
 
+    if(data.firstChar){
+      board.children[24].textContent = data.firstChar;
+    }
 
-if(data.firstChar){
-  board.children[24].textContent = data.firstChar;
-}
-
-    // ターンの更新
     const myRoleTurn = (data.currentTurn === myRole);
     isMyTurn = myRoleTurn;
     currentPlayerDisplay.textContent = myRoleTurn ? myName : opponentName;
 
-    // 結果の更新
-  if(data.result && !gameOver){
-  const iWin = data.result.winner === myRole;
-  if(iWin){
-    currentPlayerDisplay.textContent = myName;
-  } else {
-    currentPlayerDisplay.textContent = opponentName;
-  }
-  showResult(iWin ? "win" : "lose", data.result.reason);
-}
-if(data.status === "waiting" && gameOver){
-  gameOver = false;
-  const overlay = document.getElementById("resultOverlay");
-  overlay.classList.remove("show","lose","win");
-  createBoard();
-  document.getElementById("firstCharInput").disabled = myRole === "second" ? false : true;
-  document.getElementById("firstCharInput").value = "";
-  currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
-}
-    
-    
-if(data.moveHistory){
-  moveHistory = data.moveHistory;
-  const cellSize = window.innerWidth <= 600 ? (window.innerWidth - 90) / 7 : 50;
-  drawLines("lineCanvas", cellSize, 2);
-}
-    
+    if(data.result && !gameOver){
+      const iWin = data.result.winner === myRole;
+      if(iWin){
+        currentPlayerDisplay.textContent = myName;
+      } else {
+        currentPlayerDisplay.textContent = opponentName;
+      }
+      showResult(iWin ? "win" : "lose", data.result.reason);
+    }
+
+    if(data.status === "waiting" && gameOver){
+      if(roomUnsubscribe){
+        roomUnsubscribe();
+        roomUnsubscribe = null;
+      }
+      gameOver = false;
+      disconnectAlerted = false;
+      const overlay = document.getElementById("resultOverlay");
+      overlay.classList.remove("show","lose","win");
+      createBoard();
+      document.getElementById("firstCharInput").disabled = myRole !== "second";
+      document.getElementById("firstCharInput").value = "";
+      currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
+      listenToRoom();
+      return;
+    }
+
+    if(data.moveHistory){
+      moveHistory = data.moveHistory;
+      const cellSize = window.innerWidth <= 600 ? (window.innerWidth - 90) / 7 : 50;
+      drawLines("lineCanvas", cellSize, 2);
+    }
+
     updateStartHighlight();
     document.getElementById("humanValidCount").textContent = countHumanValidMoves();
   });
-}  
-
+}
 
   
   
