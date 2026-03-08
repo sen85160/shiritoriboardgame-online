@@ -1452,6 +1452,10 @@ retry.onclick = () => {
       roomUnsubscribe();
       roomUnsubscribe = null;
     }
+    gameOver = false;
+    disconnectAlerted = false;
+    const overlay = document.getElementById("resultOverlay");
+    overlay.classList.remove("show","lose","win");
     window._update(window._ref(window._db, `rooms/${roomKey}`), {
       status: "rematch_requested",
       result: null,
@@ -1465,6 +1469,7 @@ retry.onclick = () => {
       moveHistory: []
     });
     showWaiting("相手の応答を待っています...");
+    listenToRoom();
     return;
   }
   overlay.classList.remove("show","lose","win");
@@ -1520,8 +1525,9 @@ retry.onclick = () => {
   // --- タイトルへ戻るボタン ---
   const back = document.createElement("button");
   back.textContent = "タイトルへ戻る";
-  back.onclick = () => {
+ back.onclick = () => {
     overlay.classList.remove("show","lose","win");
+    hideWaiting();
     document.getElementById("gamePage").style.display = "none";
     document.getElementById("modePage").style.display = "block";
   };
