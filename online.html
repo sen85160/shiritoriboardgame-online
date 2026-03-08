@@ -1441,6 +1441,10 @@ function showResult(result, reason){
   retry.textContent = "再戦";
 retry.onclick = () => {
   if(mode === "online"){
+    if(roomUnsubscribe){
+      roomUnsubscribe();
+      roomUnsubscribe = null;
+    }
     window._update(window._ref(window._db, `rooms/${roomKey}`), {
       status: "waiting",
       result: null,
@@ -1452,6 +1456,15 @@ retry.onclick = () => {
       currentTurn: "first",
       log: [],
       moveHistory: []
+    }).then(() => {
+      gameOver = false;
+      disconnectAlerted = false;
+      overlay.classList.remove("show","lose","win");
+      createBoard();
+      document.getElementById("firstCharInput").disabled = myRole !== "second";
+      document.getElementById("firstCharInput").value = "";
+      currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
+      listenToRoom();
     });
     return;
   }
@@ -1878,22 +1891,7 @@ function listenToRoom(){
       showResult(iWin ? "win" : "lose", data.result.reason);
     }
 
-    if(data.status === "waiting" && gameOver){
-      if(roomUnsubscribe){
-        roomUnsubscribe();
-        roomUnsubscribe = null;
-      }
-      gameOver = false;
-      disconnectAlerted = false;
-      const overlay = document.getElementById("resultOverlay");
-      overlay.classList.remove("show","lose","win");
-      createBoard();
-      document.getElementById("firstCharInput").disabled = myRole !== "second";
-      document.getElementById("firstCharInput").value = "";
-      currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
-      listenToRoom();
-      return;
-    }
+    
 
     if(data.moveHistory){
       moveHistory = data.moveHistory;
