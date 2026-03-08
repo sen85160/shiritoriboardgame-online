@@ -142,15 +142,17 @@ button{ margin:5px; padding:6px 12px; }
     flex-direction: column;
     width: 90vw;
   }
-  #validCountArea { 
-    order: 1;
-    margin-top: 0;
-  }
-  #aiThinking { order: 2; }
-  #surrenderButton { order: 3; }
-  #trajectoryLabel { order: 4; }
-  #logBox { order: 5; }
-  #sidePanel h3 { order: 6; }
+ #validCountArea { 
+  order: 1;
+  margin-top: 0;
+}
+#aiThinking { order: 2; }
+#surrenderButton { order: 3; }
+#trajectoryLabel { order: 4; }
+#logBox { order: 5; }
+#sidePanel h3 { order: 6; }
+#chatTabs { order: 7; }
+#chatSection { order: 8; }
 }
 
 
@@ -350,8 +352,8 @@ button{ margin:5px; padding:6px 12px; }
 </div>
 <h3 id="logTitle">対局ログ</h3>
 <div id="logBox"></div>
-<div id="chatSection" style="display:none; margin-top:8px;">
-  <h3>チャット</h3>
+<div id="chatSection" style="display:none; margin-top:3px;">
+<h3 style="margin-top:5px; margin-bottom:5px;">チャット</h3>
   <div id="chatBox"></div>
   <div style="display:flex; gap:5px; margin-top:5px;">
     <input id="chatInput" maxlength="10" placeholder="10文字以内" style="flex:1; padding:4px;">
