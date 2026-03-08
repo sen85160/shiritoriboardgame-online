@@ -147,12 +147,13 @@ button{ margin:5px; padding:6px 12px; }
   margin-top: 0;
 }
 #aiThinking { order: 2; }
-#surrenderButton { order: 3; }
-#trajectoryLabel { order: 4; }
-#chatTabs { order: 5; }
-#logTitle { order: 6; }
-#logBox { order: 7; }
-#chatSection { order: 8; }
+#resetButton { order: 3; }  
+#surrenderButton { order: 4; }
+#trajectoryLabel { order: 5; }
+#chatTabs { order: 6; }
+#logTitle { order: 7; }
+#logBox { order: 8; }
+#chatSection { order: 9; }
 }
 
 
@@ -193,6 +194,7 @@ button{ margin:5px; padding:6px 12px; }
 #chatTabs button.active {
   background: white;
   font-weight: bold;
+  border: 2px solid red;
 }
 @media (max-width: 600px) {
   #chatBox { width: 90vw; }
@@ -330,7 +332,6 @@ button{ margin:5px; padding:6px 12px; }
 </select>
 
   <button onclick="placeWord()">置く</button>
-  <button id="resetButton" onclick="resetGame()">リセット</button>
   
 <div id="dictAlert" style="display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#f0f0f0; border:1px solid #aaa; border-radius:4px; padding:15px 20px; z-index:9999; text-align:center; box-shadow:2px 2px 6px rgba(0,0,0,0.3); min-width:300px;">
   <p id="dictAlertMsg" style="margin:0 0 10px 0;"></p>
@@ -368,7 +369,7 @@ button{ margin:5px; padding:6px 12px; }
   </div>
 </div>
  
-
+<button id="resetButton" onclick="resetGame()">リセット</button>
 <button id="surrenderButton" data-player="A" onclick="surrender(this)">降参する</button>
   
   <label style="font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 5px; user-select: none;">
@@ -1701,6 +1702,7 @@ function surrender(button) {
 }
   
 function resetGame(){
+  if(mode === "online"){ alert("オンライン対戦中はリセットできません"); return; }
   if(confirm("本当にリセットしますか？")){
     createBoard();
     document.getElementById("firstCharInput").disabled=false;
@@ -1934,14 +1936,14 @@ function startOnlineGame(){
     document.getElementById("firstCharInput").value = "";
     document.getElementById("wordInput").value = "";
 
-    if(myRole === "second"){
+if(myRole === "second"){
       currentPlayerDisplay.textContent = myName;
       document.getElementById("firstCharInput").disabled = false;
-      alert("あなたは後攻です。最初の文字を決めてください。");
+      setTimeout(() => alert("【接続しました】\nあなたは後攻です。最初の文字を決めてください。"), 300);
     } else {
       currentPlayerDisplay.textContent = opponentName;
       document.getElementById("firstCharInput").disabled = true;
-      alert("あなたは先攻です。後攻が最初の文字を置くまで待機してください。\n最初の文字が置かれたら、単語を置いてください。");
+      setTimeout(() => alert("【接続しました】\nあなたは先攻です。後攻が最初の文字を置くまで待機してください。\n最初の文字が置かれたら、単語を置いてください。"), 300);
     }
 
    document.getElementById("logBox").style.height = "160px";
