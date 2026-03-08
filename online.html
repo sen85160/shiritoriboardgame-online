@@ -93,7 +93,29 @@ body { font-family:sans-serif; padding:10px; }
 .bigTitle{ font-size:60px; font-weight:bold; margin-bottom:20px; }
 .resultBoard{ display:grid; grid-template-columns:repeat(7,40px); gap:2px; margin:15px auto; }
 .resultCell{ width:40px; height:40px; border:1px solid gray; display:flex; align-items:center; justify-content:center; }
-button{ margin:5px; padding:6px 12px; }
+button {
+  margin: 5px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #4a90d9;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+button:hover {
+  background: #357abd;
+}
+select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 2px solid #4a90d9;
+  color: #4a90d9;
+  font-size: 14px;
+  cursor: pointer;
+  background: white;
+}
+  
 .resultCell.last {
   border: 2px solid blue;  /* 太くした */
 }
@@ -117,6 +139,7 @@ button{ margin:5px; padding:6px 12px; }
 }
   
 @media (max-width: 600px) {
+  
   #container {
     flex-direction: column;
     align-items: center;
@@ -154,6 +177,8 @@ button{ margin:5px; padding:6px 12px; }
 #logTitle { order: 7; }
 #logBox { order: 8; }
 #chatSection { order: 9; }
+  
+h1 { font-size: 34px; letter-spacing: 2px; }  
 }
 
 
@@ -198,6 +223,23 @@ button{ margin:5px; padding:6px 12px; }
 }
 @media (max-width: 600px) {
   #chatBox { width: 90vw; }
+  }
+  
+/* ラジオボタンを隠してラベルをボタン化 */
+input[type="radio"] { display: none; }
+input[type="radio"] + label, label:has(input[type="radio"]) {
+  display: inline-block;
+  padding: 8px 16px;
+  margin: 3px;
+  border-radius: 8px;
+  border: 2px solid #4a90d9;
+  color: #4a90d9;
+  cursor: pointer;
+  font-size: 14px;
+}
+input[type="radio"]:checked + label, label:has(input[type="radio"]:checked) {
+  background: #4a90d9;
+  color: white;
 }
   
 </style>
@@ -205,7 +247,8 @@ button{ margin:5px; padding:6px 12px; }
 <body>
 
 <div id="modePage">
-<h2>しりとり盤面ゲーム　</h2>
+<h1 style="font-weight: bold; letter-spacing: 4px; background: linear-gradient(135deg, #4a90d9, #7b4fa3); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 5px;">しりとり盤ゲーム</h1>
+<p style="color: #888; font-size: 13px; margin-top: 0; letter-spacing: 2px;">SHIRITORI BOARD GAME</p>
 
 <p>モード選択:</p>
   <label><input type="radio" name="mode" value="human" id="modeHuman" onchange="toggleTurnSelect()"> 人間同士で対戦</label>
@@ -1456,9 +1499,10 @@ function showResult(result, reason){
   const resultFooter = document.createElement("div");
   resultFooter.className = "resultFooter";
   // フッター（ボタンエリア）も色を合わせる
-  if(mode === "ai" && result === "lose") {
+ if(mode === "ai" && result === "lose") {
     resultFooter.style.backgroundColor = "#333";
   }
+
 
   const title = document.createElement("div");
   title.className = "bigTitle";
@@ -1599,11 +1643,19 @@ currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
   };
   resultFooter.appendChild(back);
 
-  // 4. boxに合体させる
+
   box.appendChild(resultContent);
   box.appendChild(resultFooter);
 
-  // 5. 軌跡の描画
+   if(result === "lose") {
+    resultFooter.querySelectorAll("button").forEach(btn => {
+      if(btn.textContent === "結果をシェア") return;
+      btn.style.setProperty("background", "white", "important");
+      btn.style.setProperty("color", "black", "important");
+    });
+   }  
+  
+
   const resColor = (result === "lose") ? "rgba(255, 255, 255, 0.30)" : "rgba(0, 0, 255, 0.15)";
   setTimeout(() => {
     const ctx = resCanvas.getContext("2d");
@@ -2047,6 +2099,10 @@ if(data.status === "ready" && !gameOver){
     currentPlayerDisplay.textContent = myRoleTurn ? myName : opponentName;
 
 if(data.status === "rematch_requested" && gameOver){
+  if(window._pendingRematch){
+    window._pendingRematch();
+    return;
+  }
       showWaiting("相手が再戦を希望しています", true);
      window._pendingRematch = () => {
   gameOver = false;
