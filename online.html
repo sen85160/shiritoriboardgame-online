@@ -1468,6 +1468,11 @@ retry.onclick = () => {
       log: [],
       moveHistory: []
     });
+    createBoard();
+document.getElementById("firstCharInput").disabled = myRole !== "second";
+document.getElementById("firstCharInput").value = "";
+document.getElementById("wordInput").value = "";
+currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
     showWaiting("相手の応答を待っています...");
     listenToRoom();
     return;
@@ -1914,21 +1919,22 @@ if(data.status === "ready" && !gameOver){
 
 if(data.status === "rematch_requested"){
       showWaiting("相手が再戦を希望しています", true);
-      window._pendingRematch = () => {
-        gameOver = false;
-        disconnectAlerted = false;
-        const overlay = document.getElementById("resultOverlay");
-        overlay.classList.remove("show","lose","win");
-        window._update(window._ref(window._db, `rooms/${roomKey}`), {
-          status: "ready"
-        }).then(() => {
-          createBoard();
-          document.getElementById("firstCharInput").disabled = myRole !== "second";
-          document.getElementById("firstCharInput").value = "";
-          currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
-          listenToRoom();
-        });
-      };
+     window._pendingRematch = () => {
+  gameOver = false;
+  disconnectAlerted = false;
+  window._pendingRematch = null;
+  const overlay = document.getElementById("resultOverlay");
+  overlay.classList.remove("show","lose","win");
+  createBoard();
+  document.getElementById("firstCharInput").disabled = myRole !== "second";
+  document.getElementById("firstCharInput").value = "";
+  document.getElementById("wordInput").value = "";
+  currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
+  window._update(window._ref(window._db, `rooms/${roomKey}`), {
+    status: "ready"
+  });
+  listenToRoom();
+};
     }
   
     if(data.result && !gameOver){
