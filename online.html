@@ -1921,7 +1921,7 @@ if(data.status === "ready" && !gameOver){
       }
       showResult(iWin ? "win" : "lose", data.result.reason);
     }
-if(data.status === "rematch_requested" && gameOver){
+if(data.status === "rematch_requested"){
       showWaiting("相手が再戦を希望しています", true);
       window._pendingRematch = () => {
         gameOver = false;
