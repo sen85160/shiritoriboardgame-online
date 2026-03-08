@@ -337,7 +337,7 @@ button{ margin:5px; padding:6px 12px; }
   
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, update, remove } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAp14vmxoLdh4WwD9kKMnmTaLZBAMNC2L8",
@@ -358,6 +358,7 @@ window._get = get;
 window._onValue = onValue;
 window._update = update;
 window._remove = remove;
+window._onDisconnect = onDisconnect;  
 </script>  
   
   
@@ -791,10 +792,16 @@ if(!isHiraganaOnly(word)){
     return;
   }
   
- if(!fromAI && getLastChar(word) === "ん"){
+
+  if(!fromAI && getLastChar(word) === "ん"){
+  if(mode === "online"){
+    window._update(window._ref(window._db, `rooms/${roomKey}`), {
+      result: { winner: myRole === "first" ? "second" : "first", reason: `${myName}が「ん」で終わる単語を置いたため` }
+    });
+  }
   showResult("lose", "「ん」で終わる単語を置いたため");
   return;
-} 
+}
   
 
   if(!fromAI){
@@ -938,13 +945,13 @@ document.getElementById("humanValidCount").textContent = countHumanValidMoves();
     }
   }
 
-  if(mode === "online"){
+ if(mode === "online"){
   const validCount = countHumanValidMoves();
   if(validCount === 0){
     window._update(window._ref(window._db, `rooms/${roomKey}`), {
-      result: { winner: myRole === "first" ? "second" : "first", reason: "置ける単語がなくなったため" }
+      result: { winner: myRole, reason: "相手が置ける単語がなくなったため" }
     });
-    showResult("lose", "置ける単語がなくなったため");
+    showResult("win", "相手が置ける単語がなくなったため");
     return;
   }
 }
@@ -1677,6 +1684,7 @@ let myRole = ""; // "first" or "second"
 let myName = "";
 let opponentName = "";
 let isMyTurn = false;
+let disconnectAlerted = false;  
 
 function createRoom(){
   roomKey = document.getElementById("roomKeyInput").value.trim();
@@ -1800,10 +1808,23 @@ function listenToRoom(){
   const db = window._db;
   const ref = window._ref;
 
+const discRef = window._ref(db, `rooms/${roomKey}/disconnected/${myRole}`);
+window._onDisconnect(discRef).set(true);
+  
+
   const roomRef = ref(db, `rooms/${roomKey}`);
   window._onValue(roomRef, (snapshot) => {
     const data = snapshot.val();
     if(!data) return;
+
+if(data.disconnected){
+  const opponentRole = myRole === "first" ? "second" : "first";
+  if(data.disconnected[opponentRole] && !gameOver && !disconnectAlerted){
+    disconnectAlerted = true;
+    alert("相手が退出しました");
+  }
+}
+  
 
     // 盤面の更新
     if(data.board){
@@ -1868,13 +1889,7 @@ if(data.moveHistory){
   });
 }  
 
-window.addEventListener("beforeunload", () => {
-  if(mode === "online" && roomKey){
-    window._update(window._ref(window._db, `rooms/${roomKey}`), {
-      result: { winner: myRole === "first" ? "second" : "first", reason: "相手が退出しました" }
-    });
-  }
-});  
+
   
   
   
