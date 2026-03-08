@@ -1889,7 +1889,15 @@ function listenToRoom(){
       const opponentRole = myRole === "first" ? "second" : "first";
       if(data.disconnected[opponentRole] && !gameOver && !disconnectAlerted){
         disconnectAlerted = true;
-        alert("相手が退出しました");
+        alert("相手が退出しました。タイトルに戻ります。");
+         if(roomUnsubscribe){
+    roomUnsubscribe();
+    roomUnsubscribe = null;
+  }
+  document.getElementById("resultOverlay").classList.remove("show","lose","win");
+  hideWaiting();
+  document.getElementById("gamePage").style.display = "none";
+  document.getElementById("modePage").style.display = "block";
       }
     }
 
