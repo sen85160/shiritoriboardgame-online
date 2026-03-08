@@ -323,6 +323,13 @@ button{ margin:5px; padding:6px 12px; }
 </div>
 </div>
 
+<div id="waitingOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9998; justify-content:center; align-items:center;">
+  <div style="background:white; border-radius:10px; padding:30px; text-align:center; min-width:280px;">
+    <p id="waitingMessage" style="font-size:18px; margin-bottom:20px;"></p>
+    <button id="waitingOkBtn" style="display:none;" onclick="handleWaitingOk()">OK</button>
+  </div>
+</div>
+  
 <div id="resultOverlay">
 <div class="resultBox" id="resultBox"></div>
 </div>
@@ -1446,7 +1453,7 @@ retry.onclick = () => {
       roomUnsubscribe = null;
     }
     window._update(window._ref(window._db, `rooms/${roomKey}`), {
-      status: "waiting",
+      status: "rematch_requested",
       result: null,
       board: Array(49).fill(""),
       lastIndex: 24,
@@ -1456,16 +1463,8 @@ retry.onclick = () => {
       currentTurn: "first",
       log: [],
       moveHistory: []
-    }).then(() => {
-      gameOver = false;
-      disconnectAlerted = false;
-      overlay.classList.remove("show","lose","win");
-      createBoard();
-      document.getElementById("firstCharInput").disabled = myRole !== "second";
-      document.getElementById("firstCharInput").value = "";
-      currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
-      listenToRoom();
     });
+    showWaiting("相手の応答を待っています...");
     return;
   }
   overlay.classList.remove("show","lose","win");
@@ -1775,15 +1774,16 @@ function waitForOpponent(){
   const ref = window._ref;
   const onValue = window._onValue;
 
+  showWaiting("相手の入室を待っています...");
+
   const roomRef = ref(db, `rooms/${roomKey}/status`);
   const unsubscribe = onValue(roomRef, (snapshot) => {
     if(snapshot.val() === "ready"){
       unsubscribe();
+      hideWaiting();
       startOnlineGame();
     }
   });
-  // 待機中の表示
-  alert("相手の入室を待っています...");
 }
 
 function startOnlineGame(){
@@ -1825,6 +1825,27 @@ function startOnlineGame(){
     listenToRoom();
   });
 }
+
+function showWaiting(message, showOk = false) {
+  const overlay = document.getElementById("waitingOverlay");
+  document.getElementById("waitingMessage").textContent = message;
+  document.getElementById("waitingOkBtn").style.display = showOk ? "inline-block" : "none";
+  overlay.style.display = "flex";
+}
+
+function hideWaiting() {
+  document.getElementById("waitingOverlay").style.display = "none";
+}
+
+function handleWaitingOk() {
+  hideWaiting();
+  if(window._pendingRematch) {
+    window._pendingRematch();
+    window._pendingRematch = null;
+  }
+}
+
+  
 
 function listenToRoom(){
   const db = window._db;
@@ -1872,7 +1893,11 @@ function listenToRoom(){
         logBox.appendChild(div);
       });
     }
-
+    
+if(data.status === "ready" && !gameOver){
+      hideWaiting();
+    }
+    
     if(data.firstChar){
       board.children[24].textContent = data.firstChar;
     }
@@ -1890,7 +1915,24 @@ function listenToRoom(){
       }
       showResult(iWin ? "win" : "lose", data.result.reason);
     }
-
+if(data.status === "rematch_requested" && gameOver){
+      showWaiting("相手が再戦を希望しています", true);
+      window._pendingRematch = () => {
+        gameOver = false;
+        disconnectAlerted = false;
+        const overlay = document.getElementById("resultOverlay");
+        overlay.classList.remove("show","lose","win");
+        window._update(window._ref(window._db, `rooms/${roomKey}`), {
+          status: "ready"
+        }).then(() => {
+          createBoard();
+          document.getElementById("firstCharInput").disabled = myRole !== "second";
+          document.getElementById("firstCharInput").value = "";
+          currentPlayerDisplay.textContent = myRole === "second" ? myName : opponentName;
+          listenToRoom();
+        });
+      };
+    }
     
 
     if(data.moveHistory){
