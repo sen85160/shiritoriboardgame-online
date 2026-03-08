@@ -153,7 +153,6 @@ button{ margin:5px; padding:6px 12px; }
 #logTitle { order: 6; }
 #logBox { order: 7; }
 #chatSection { order: 8; }
-#sidePanel h3 { order: 9; }
 }
 
 
@@ -2083,6 +2082,16 @@ if(data.status === "rematch_requested" && gameOver){
       drawLines("lineCanvas", cellSize, 2);
     }
 
+if(data.chat){
+  const chatBox = document.getElementById("chatBox");
+  const lastMsg = chatBox.lastChild;
+  const lastText = data.chat.sender === myRole ? data.chat.text : opponentName + ": " + data.chat.text;
+  if(!lastMsg || lastMsg.textContent !== lastText){
+    receiveChat(data);
+  }
+}
+
+    
     updateStartHighlight();
     document.getElementById("humanValidCount").textContent = countHumanValidMoves();
   });
