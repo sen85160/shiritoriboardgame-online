@@ -142,17 +142,18 @@ button{ margin:5px; padding:6px 12px; }
     flex-direction: column;
     width: 90vw;
   }
- #validCountArea { 
+#validCountArea { 
   order: 1;
   margin-top: 0;
 }
 #aiThinking { order: 2; }
 #surrenderButton { order: 3; }
 #trajectoryLabel { order: 4; }
-#logBox { order: 5; }
-#sidePanel h3 { order: 6; }
-#chatTabs { order: 7; }
+#chatTabs { order: 5; }
+#logTitle { order: 6; }
+#logBox { order: 7; }
 #chatSection { order: 8; }
+#sidePanel h3 { order: 9; }
 }
 
 
@@ -1944,7 +1945,7 @@ function startOnlineGame(){
       alert("あなたは先攻です。後攻が最初の文字を置くまで待機してください。\n最初の文字が置かれたら、単語を置いてください。");
     }
 
-   document.getElementById("logBox").style.height = "200px";
+   document.getElementById("logBox").style.height = "160px";
 document.getElementById("chatSection").style.display = "block";
 if(window.innerWidth <= 600){
   document.getElementById("chatTabs").style.display = "flex";
