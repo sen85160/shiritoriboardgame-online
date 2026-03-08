@@ -1456,6 +1456,7 @@ retry.onclick = () => {
   }
   overlay.classList.remove("show","lose","win");
   createBoard();
+  disconnectAlerted = false;
   document.getElementById("firstCharInput").disabled = (mode === "online" && myRole === "first");
   document.getElementById("firstCharInput").value = "";
   if(mode === "ai"){
