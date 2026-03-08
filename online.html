@@ -152,6 +152,49 @@ button{ margin:5px; padding:6px 12px; }
   #logBox { order: 5; }
   #sidePanel h3 { order: 6; }
 }
+
+
+#chatBox {
+  width: 240px;
+  height: 180px;
+  border: 1px solid black;
+  overflow-y: auto;
+  padding: 5px;
+  background: #f8f8f8;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.chatMsg {
+  max-width: 80%;
+  padding: 5px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  word-break: break-all;
+}
+.chatMsg.mine {
+  align-self: flex-end;
+  background: #dcf8c6;
+}
+.chatMsg.theirs {
+  align-self: flex-start;
+  background: #fff;
+  border: 1px solid #ddd;
+}
+#chatTabs button {
+  flex: 1;
+  padding: 5px;
+  border: 1px solid #ccc;
+  background: #eee;
+  cursor: pointer;
+}
+#chatTabs button.active {
+  background: white;
+  font-weight: bold;
+}
+@media (max-width: 600px) {
+  #chatBox { width: 90vw; }
+}
   
 </style>
 </head>
@@ -301,8 +344,20 @@ button{ margin:5px; padding:6px 12px; }
 </div>
 
 <div id="sidePanel">
-<h3>対局ログ</h3>
+<div id="chatTabs" style="display:none;">
+  <button id="tabLog" class="active" onclick="switchTab('log')">対局ログ</button>
+  <button id="tabChat" onclick="switchTab('chat')">チャット</button>
+</div>
+<h3 id="logTitle">対局ログ</h3>
 <div id="logBox"></div>
+<div id="chatSection" style="display:none; margin-top:8px;">
+  <h3>チャット</h3>
+  <div id="chatBox"></div>
+  <div style="display:flex; gap:5px; margin-top:5px;">
+    <input id="chatInput" maxlength="10" placeholder="10文字以内" style="flex:1; padding:4px;">
+    <button onclick="sendChat()">送信</button>
+  </div>
+</div>
 
 <div id="statusArea">
   <div id="aiThinking">AI考え中…</div>
@@ -562,6 +617,9 @@ else { // 人間vs人間
   }
 document.getElementById("modePage").style.display="none";
 document.getElementById("gamePage").style.display="block";
+document.getElementById("logBox").style.height = "400px";
+document.getElementById("chatSection").style.display = "none";
+document.getElementById("chatTabs").style.display = "none";
 createBoard();
 // 入力欄を復活させ、中身を空にする
 const firstCharInput = document.getElementById("firstCharInput");
@@ -1717,7 +1775,48 @@ function getHintMoves(moves) {
   return [pick1, pick2, pick3];
 }  
   
- 
+function switchTab(tab) {
+  const logBox = document.getElementById("logBox");
+  const logTitle = document.getElementById("logTitle");
+  const chatSection = document.getElementById("chatSection");
+  const tabLog = document.getElementById("tabLog");
+  const tabChat = document.getElementById("tabChat");
+
+  if(tab === "log"){
+    logBox.style.display = "block";
+    logTitle.style.display = "block";
+    chatSection.style.display = "none";
+    tabLog.classList.add("active");
+    tabChat.classList.remove("active");
+  } else {
+    logBox.style.display = "none";
+    logTitle.style.display = "none";
+    chatSection.style.display = "block";
+    tabLog.classList.remove("active");
+    tabChat.classList.add("active");
+  }
+}
+
+function sendChat(){
+  const input = document.getElementById("chatInput");
+  const text = input.value.trim();
+  if(!text || mode !== "online") return;
+  input.value = "";
+  window._update(window._ref(window._db, `rooms/${roomKey}`), {
+    chat: { text: text, sender: myRole, timestamp: Date.now() }
+  });
+}
+
+function receiveChat(data){
+  if(!data.chat) return;
+  const chatBox = document.getElementById("chatBox");
+  const isMine = data.chat.sender === myRole;
+  const div = document.createElement("div");
+  div.className = "chatMsg " + (isMine ? "mine" : "theirs");
+  div.textContent = isMine ? data.chat.text : opponentName + ": " + data.chat.text;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+} 
   
   
 let roomKey = "";
@@ -1843,7 +1942,14 @@ function startOnlineGame(){
       alert("あなたは先攻です。後攻が最初の文字を置くまで待機してください。\n最初の文字が置かれたら、単語を置いてください。");
     }
 
-    // Firebase監視開始
+   document.getElementById("logBox").style.height = "200px";
+document.getElementById("chatSection").style.display = "block";
+if(window.innerWidth <= 600){
+  document.getElementById("chatTabs").style.display = "flex";
+  switchTab("log");
+} else {
+  document.getElementById("chatTabs").style.display = "none";
+}
     listenToRoom();
   });
 }
