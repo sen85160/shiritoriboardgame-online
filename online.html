@@ -948,7 +948,16 @@ document.getElementById("humanValidCount").textContent = countHumanValidMoves();
  if(mode === "online"){
   const validCount = countHumanValidMoves();
   if(validCount === 0){
+    const newBoard = Array.from(board.children, c => c.textContent);
+    const newLog = [];
+    logBox.querySelectorAll(".logEntry").forEach(e => newLog.push(e.innerHTML));
     window._update(window._ref(window._db, `rooms/${roomKey}`), {
+      board: newBoard,
+      lastIndex: lastIndex,
+      lastChar: lastChar,
+      usedWords: Array.from(usedWords),
+      log: newLog,
+      moveHistory: moveHistory,
       result: { winner: myRole, reason: "相手が置ける単語がなくなったため" }
     });
     showResult("win", "相手が置ける単語がなくなったため");
@@ -1595,8 +1604,7 @@ function surrender(button) {
     showResult("win", `${loserName}が降参したため` + hints);
   }
 
-  // 4. 結果表示（reasonMessageにすべての情報が入った状態で送る）
-  showResult(resultType, reasonMessage);
+
 }
   
 function resetGame(){
@@ -1863,8 +1871,13 @@ if(data.firstChar){
     currentPlayerDisplay.textContent = myRoleTurn ? myName : opponentName;
 
     // 結果の更新
-   if(data.result && !gameOver){
+  if(data.result && !gameOver){
   const iWin = data.result.winner === myRole;
+  if(iWin){
+    currentPlayerDisplay.textContent = myName;
+  } else {
+    currentPlayerDisplay.textContent = opponentName;
+  }
   showResult(iWin ? "win" : "lose", data.result.reason);
 }
 if(data.status === "waiting" && gameOver){
